@@ -2,23 +2,38 @@
   "name": "@solace/client-sdk",
   "version": "0.1.0",
   "description": "Solace client SDK for secure blob encryption and VAD-based audio capture.",
-  "main": "src/index.js",
-  "types": "src/index.d.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "build:watch": "tsc --watch",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "demo": "cd demo && npm start",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx",
+    "clean": "if exist dist rmdir /s /q dist",
+    "prebuild": "npm run clean"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "webrtcvad": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
     "jest": "^29.0.0",
     "@types/jest": "^29.0.0",
     "eslint": "^8.0.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "@types/webrtcvad": "^1.0.0",
+    "jest-environment-jsdom": "^29.0.0",
+        "ts-jest": "^29.0.0"
   }
 } 

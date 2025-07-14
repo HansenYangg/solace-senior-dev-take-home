@@ -1,4 +1,5 @@
-// Solace Client SDK - src/index.ts
+// Local copy of SDK functions for demo
+// This avoids import path issues with React's build system
 
 // Helper functions for base64 encoding/decoding 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -16,56 +17,6 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   }
   return bytes.buffer;
 }
-
-// Encryption APIs
-export async function encryptBlob(data: string): Promise<{ iv: string; ciphertext: string; tag: string }> {
-  const enc = new TextEncoder();
-  const key = await window.crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const encoded = enc.encode(data);
-  const encrypted = await window.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoded
-  );
-  // AES-GCM ciphertext includes the tag at the end
-  // We'll split it for API compatibility
-  const tagLength = 16; // 128 bits
-  const ciphertextBytes = new Uint8Array(encrypted);
-  const tag = ciphertextBytes.slice(ciphertextBytes.length - tagLength);
-  const ciphertext = ciphertextBytes.slice(0, ciphertextBytes.length - tagLength);
-  return {
-    iv: arrayBufferToBase64(iv.buffer),
-    ciphertext: arrayBufferToBase64(ciphertext.buffer),
-    tag: arrayBufferToBase64(tag.buffer),
-  };
-}
-
-export async function decryptBlob(
-  { iv, ciphertext, tag }: { iv: string; ciphertext: string; tag: string },
-  key: CryptoKey
-): Promise<string> {
-  const dec = new TextDecoder();
-  const ivBuf = base64ToArrayBuffer(iv);
-  const ciphertextBuf = base64ToArrayBuffer(ciphertext);
-  const tagBuf = base64ToArrayBuffer(tag);
-  // Concatenate ciphertext and tag
-  const fullCipher = new Uint8Array(ciphertextBuf.byteLength + tagBuf.byteLength);
-  fullCipher.set(new Uint8Array(ciphertextBuf), 0);
-  fullCipher.set(new Uint8Array(tagBuf), ciphertextBuf.byteLength);
-  const decrypted = await window.crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: new Uint8Array(ivBuf) },
-    key,
-    fullCipher
-  );
-  return dec.decode(decrypted);
-}
-
-// --- Voice Activity Detection (VAD) ---
 
 // VAD Configuration interface
 export interface VADConfig {
@@ -141,8 +92,10 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
   let bufferIndex = 0;
   
   // Create script processor for real-time processing
-  console.log('VAD: Creating script processor...');
-  const processor = audioContext.createScriptProcessor(frameSize, 1, 1);
+  // Use a power-of-two buffer size that's compatible with ScriptProcessorNode
+  const processorBufferSize = Math.pow(2, Math.ceil(Math.log2(frameSize)));
+  console.log('VAD: Creating script processor with buffer size:', processorBufferSize);
+  const processor = audioContext.createScriptProcessor(processorBufferSize, 1, 1);
   console.log('VAD: Script processor created');
   
   let frameCount = 0;
@@ -166,8 +119,8 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
     
     const input = event.inputBuffer.getChannelData(0);
     
-    // Fill buffer
-    for (let i = 0; i < frameSize; i++) {
+    // Process all input samples
+    for (let i = 0; i < input.length; i++) {
       buffer[bufferIndex] = input[i];
       bufferIndex++;
       
@@ -297,73 +250,5 @@ function convertToPCM(float32Array: Float32Array): ArrayBuffer {
   return pcmArray.buffer;
 }
 
-// --- Upload/Download Helpers ---
-export async function uploadBlob(blob: Blob, apiUrl: string, token?: string): Promise<string> {
-  // POST the blob to the Task A endpoint, return blobKey
-  const formData = new FormData();
-  formData.append('file', blob);
-  // Optionally add token for auth
-  const headers: Record<string, string> = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    body: formData,
-    headers,
-  });
-  if (!response.ok) throw new Error(`Upload failed: ${response.statusText}`);
-  const data = await response.json();
-  if (!data.blobKey) throw new Error('No blobKey returned from server');
-  return data.blobKey;
-}
-
-export async function downloadAndDecrypt(blobKey: string, apiUrl: string, key: CryptoKey): Promise<string> {
-  // Download from Task A endpoint and decrypt
-  const response = await fetch(`${apiUrl}?blobKey=${encodeURIComponent(blobKey)}`);
-  if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
-  const data = await response.json();
-  if (!data.plaintext) throw new Error('No plaintext returned from server');
-  // The plaintext is base64-encoded
-  const plaintextBuf = base64ToArrayBuffer(data.plaintext);
-  const dec = new TextDecoder();
-  return dec.decode(plaintextBuf);
-} 
-
-// --- S3 Direct Upload/Download via Presigned URLs ---
-/**
- * Uploads a Blob directly to S3 using a presigned URL.
- * @param blob The Blob to upload
- * @param presignedUrl The presigned S3 URL for PUT
- * @returns The S3 object key (if known), or void
- */
-export async function uploadBlobToS3(blob: Blob, presignedUrl: string): Promise<void> {
-  const response = await fetch(presignedUrl, {
-    method: 'PUT',
-    body: blob,
-    // No custom headers unless required by the presigned URL
-  });
-  if (!response.ok) throw new Error(`S3 upload failed: ${response.statusText}`);
-}
-
-/**
- * Downloads a Blob directly from S3 using a presigned URL.
- * @param presignedUrl The presigned S3 URL for GET
- * @returns The downloaded Blob
- */
-export async function downloadBlobFromS3(presignedUrl: string): Promise<Blob> {
-  const response = await fetch(presignedUrl);
-  if (!response.ok) throw new Error(`S3 download failed: ${response.statusText}`);
-  return await response.blob();
-}
-
-/**
- * Expected backend endpoints (Task A) for presigned URL flow:
- *   POST /get-upload-url { filename } => { url, key }
- *   GET  /get-download-url?key=... => { url }
- *
- * The SDK should:
- *   1. Request a presigned upload URL from the backend
- *   2. PUT the file to S3 using uploadBlobToS3
- *   3. Store the returned S3 key
- *   4. Request a presigned download URL from the backend using the key
- *   5. GET the file from S3 using downloadBlobFromS3
- */ 
+// Export other SDK functions as needed
+export { arrayBufferToBase64, base64ToArrayBuffer }; 

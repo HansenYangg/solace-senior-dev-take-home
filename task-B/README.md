@@ -43,9 +43,19 @@ const plaintext = await decryptBlob({ iv, ciphertext, tag }, key);
 
 ### **recordAndDetectVoice**
 ```ts
-import { recordAndDetectVoice } from '@solace/client-sdk';
-for await (const { frame, timestamp } of recordAndDetectVoice()) {
-  // handle speech frames
+import { recordAndDetectVoice, VADConfig } from '@solace/client-sdk';
+
+// Configure VAD parameters
+const config: VADConfig = {
+  sensitivity: 2,        // 0-3 (0=least sensitive, 3=most sensitive)
+  frameDuration: 30,     // 10, 20, or 30 ms
+  sampleRate: 16000      // 8000, 16000, 32000, or 48000 Hz
+};
+
+// Start recording with VAD
+for await (const { frame, timestamp } of recordAndDetectVoice(config)) {
+  // handle speech frames (ArrayBuffer in 16-bit PCM format)
+  console.log(`Voice detected at ${timestamp}ms`);
 }
 ```
 
@@ -93,9 +103,12 @@ npm test
 
 ## Deliverables Checklist
 - [x] SDK package structure
-- [x] Encryption/decryption APIs
-- [x] VAD API stub
-- [x] Upload/download helpers stub
-- [x] React demo app scaffold
-- [x] Unit test setup
-- [x] README with usage and demo instructions 
+- [x] Encryption/decryption APIs (AES-GCM 256)
+- [x] VAD implementation with configurable sensitivity
+- [x] Upload/download helpers for S3 presigned URLs
+- [x] React demo app with real VAD integration
+- [x] Unit test setup and encryption tests
+- [x] README with usage and demo instructions
+- [x] VAD configuration options (sensitivity, frame duration, sample rate)
+- [x] Real-time voice activity detection
+- [x] Audio processing and PCM conversion 
