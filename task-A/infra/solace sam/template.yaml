@@ -1,0 +1,285 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Solace Task A: Enclave-Style Decryption Service
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Default: solace-encrypted-blobs-hansen-088597267062-20250714
+    Description: S3 bucket for encrypted blobs
+
+Resources:
+  DecryptFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: hello_world/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref S3Bucket
+          KMS_KEY_ARN: !GetAtt DecryptKMSKey.Arn
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref S3Bucket
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Resource: !GetAtt DecryptKMSKey.Arn
+      Events:
+        DecryptApi:
+          Type: Api
+          Properties:
+            Path: /decrypt
+            Method: post
+            RestApiId: !Ref Api
+
+  PresignedUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: hello_world/
+      Handler: get_presigned_url.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref S3Bucket
+          KMS_KEY_ARN: !GetAtt DecryptKMSKey.Arn
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref S3Bucket
+        - S3ReadPolicy:
+            BucketName: !Ref S3Bucket
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - kms:Encrypt
+              Resource: !GetAtt DecryptKMSKey.Arn
+      Events: {}
+  
+  PresignedUrlFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PresignedUrlFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+  
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      DefinitionBody:
+        swagger: 2.0
+        info:
+          title: Solace API
+          version: 1.0
+        paths:
+          /get-upload-url:
+            post:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PresignedUrlFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                    responseTemplates:
+                      application/json: '{}'
+              responses:
+                "200":
+                  description: "CORS support"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Origin:
+                      type: string
+          /get-download-url:
+            get:
+              produces:
+                - application/json
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PresignedUrlFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+                      method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                    responseTemplates:
+                      application/json: '{}'
+              responses:
+                "200":
+                  description: "CORS support"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Origin:
+                      type: string
+          /decrypt:
+            post:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DecryptFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                    responseTemplates:
+                      application/json: '{}'
+              responses:
+                "200":
+                  description: "CORS support"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Origin:
+                      type: string
+          /encrypt-and-upload:
+            post:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PresignedUrlFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                    responseTemplates:
+                      application/json: '{}'
+              responses:
+                "200":
+                  description: "CORS support"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Origin:
+                      type: string
+
+  DecryptKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for Solace decryption Lambda
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - kms:Decrypt
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: solace/decrypt
+
+  DecryptKMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/solace/decrypt-hansen-11111
+      TargetKeyId: !Ref DecryptKMSKey
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref DecryptKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Outputs:
+  DecryptApiUrl:
+    Description: "API Gateway endpoint URL for decryption"
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/Prod/decrypt/"
+  DecryptFunctionArn:
+    Description: "Decrypt Lambda Function ARN"
+    Value: !GetAtt DecryptFunction.Arn
+  DecryptKMSKeyArn:
+    Description: "KMS Key ARN"
+    Value: !GetAtt DecryptKMSKey.Arn
+  S3BucketName:
+    Description: "S3 Bucket Name for encrypted blobs"
+    Value: !Ref S3Bucket
