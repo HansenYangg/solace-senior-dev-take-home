@@ -24,7 +24,7 @@ app.post('/tts', async (req, res) => {
     OutputFormat: 'mp3',
     Text: text,
     VoiceId: voiceId,
-    Engine: 'standard',
+    Engine: 'neural',
   };
 
   try {

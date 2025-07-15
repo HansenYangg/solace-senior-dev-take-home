@@ -99,20 +99,20 @@ const App: React.FC = () => {
   const [showAbout, setShowAbout] = useState(false);
 
   // Load available audio devices
-  useEffect(() => {
-    const loadDevices = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = devices.filter(device => device.kind === 'audioinput');
-        setAudioDevices(audioInputs);
-        if (audioInputs.length > 0 && !selectedDeviceId) {
-          setSelectedDeviceId(audioInputs[0].deviceId);
-        }
-      } catch (err) {
-        console.error('Failed to enumerate devices:', err);
+  const loadDevices = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(device => device.kind === 'audioinput');
+      setAudioDevices(audioInputs);
+      if (audioInputs.length > 0 && !selectedDeviceId) {
+        setSelectedDeviceId(audioInputs[0].deviceId);
       }
-    };
-    
+    } catch (err) {
+      console.error('Failed to enumerate devices:', err);
+    }
+  };
+
+  useEffect(() => {
     loadDevices();
     
     // Listen for device changes
@@ -556,6 +556,7 @@ const App: React.FC = () => {
         <select 
           value={selectedDeviceId} 
           onChange={(e) => setSelectedDeviceId(e.target.value)}
+          onFocus={loadDevices} // refresh device list when dropdown is focused
           style={{
             width: '100%',
             padding: '0.6rem',
@@ -595,9 +596,33 @@ const App: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         gap: '0.7rem',
+        flexDirection: 'row', // revert to row for text
       }}>
         <span role="img" aria-label="wave" style={{ fontSize: '2.1rem' }}>👋</span>
         Hi! I'm Solace, your personal AI companion for emotional wellness and mental health. Feel free to send me a message whenever :)
+      </div>
+      {/* Mascot image below the text box */}
+      <div style={{
+        position: 'absolute',
+        top: 380, // moved 1 tile higher
+        left: 32,
+        zIndex: 2,
+        width: 320,
+        display: 'flex',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+      }}>
+        <img
+          src={process.env.PUBLIC_URL + '/solace-mascot.png'}
+          alt="Solace Mascot"
+          style={{
+            width: '320px',
+            animation: 'wave-mascot 2.5s infinite ease-in-out',
+            transformOrigin: '30% 10%',
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        />
       </div>
 
       {/* Voice Selection Dropdown */}
@@ -920,10 +945,10 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
-      {/* Tip box at bottom left */}
+      {/* Tip box at bottom right */}
       <div style={{
         position: 'absolute',
-        left: 32,
+        right: 32,
         bottom: 32,
         zIndex: 2,
         maxWidth: 320,
@@ -957,6 +982,14 @@ const App: React.FC = () => {
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+        @keyframes wave-mascot {
+          0%, 100% { transform: rotate(-8deg); }
+          10% { transform: rotate(-18deg); }
+          20% { transform: rotate(-8deg); }
+          30% { transform: rotate(-18deg); }
+          40% { transform: rotate(-8deg); }
+          100% { transform: rotate(-8deg); }
         }
       `}</style>
     </div>
