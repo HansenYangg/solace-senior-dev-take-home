@@ -37,6 +37,28 @@ A secure voice processing system with enclave-style decryption, cross-platform c
    # Follow setup instructions in task-C/README.md
    ```
 
+## Local TTS (Polly Proxy) Setup
+
+To enable Text-to-Speech (TTS) in the Task C frontend, you must run a local AWS Polly proxy server:
+
+1. In the project root, create a `.env` file with your AWS credentials:
+   ```
+   AWS_ACCESS_KEY_ID=your_access_key_id
+   AWS_SECRET_ACCESS_KEY=your_secret_access_key
+   AWS_REGION=us-east-1
+   ```
+2. Install dependencies:
+   ```sh
+   npm install express aws-sdk cors dotenv
+   ```
+3. Start the proxy server:
+   ```sh
+   node polly-proxy.js
+   ```
+   The proxy will listen on `http://localhost:5000/tts`.
+
+4. The Task C React app will use this proxy for TTS. **The proxy must be running for TTS to work.**
+
 ## Submission Checklist
 
 - [ ] Task A: Lambda decryption service deployed and tested

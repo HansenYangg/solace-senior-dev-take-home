@@ -30,6 +30,24 @@ function pcmToWav(frames: ArrayBuffer[], sampleRate = 16000): Blob {
   return new Blob([wavBuffer], { type: 'audio/wav' });
 }
 
+// TTS utility function (uses local proxy server)
+// NOTE: The local Polly proxy (polly-proxy.js) must be running for TTS to work.
+async function synthesizeSpeech(text: string, voiceId: string = 'Nicole'): Promise<string | null> {
+  try {
+    const resp = await fetch('http://localhost:5000/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voiceId }),
+    });
+    if (!resp.ok) throw new Error('TTS failed: ' + resp.statusText);
+    const blob = await resp.blob();
+    return URL.createObjectURL(blob);
+  } catch (err) {
+    alert('TTS error: ' + (err instanceof Error ? err.message : String(err)));
+    return null;
+  }
+}
+
 const ASR_API_URL = process.env.REACT_APP_ASR_API_URL || 'https://api.openai.com/v1/audio/transcriptions';
 const CHAT_API_URL = process.env.REACT_APP_CHAT_API_URL || 'https://api.openai.com/v1/chat/completions';
 
@@ -50,6 +68,10 @@ const App: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const [messages, setMessages] = useState<{role: 'user'|'solace', text: string}[]>([]);
   const [pendingTranscript, setPendingTranscript] = useState<string | null>(null);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Add state for selected voice
+  const [selectedVoice, setSelectedVoice] = useState<'Aria' | 'Matthew'>('Aria');
 
   // Load available audio devices
   useEffect(() => {
@@ -339,6 +361,21 @@ const App: React.FC = () => {
     }
   };
 
+  // Play TTS for latest AI message
+  const handlePlayTTS = async () => {
+    const lastSolaceMsg = messages.filter(m => m.role === 'solace').slice(-1)[0];
+    if (!lastSolaceMsg) return;
+    setTtsAudioUrl(null);
+    const voiceId = selectedVoice; // Use Aria or Matthew
+    const url = await synthesizeSpeech(lastSolaceMsg.text, voiceId);
+    if (url) {
+      setTtsAudioUrl(url);
+      setTimeout(() => {
+        audioRef.current?.play();
+      }, 100);
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -439,6 +476,41 @@ const App: React.FC = () => {
         >
           <span style={{ fontSize: '1.15rem' }}>🎯</span> Test
         </button>
+      </div>
+
+      {/* Voice Selection Dropdown */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '1.2rem',
+        marginBottom: '1.2rem',
+        marginTop: '0.5rem',
+      }}>
+        <label style={{ fontWeight: 600, color: '#2e7d32', fontSize: '1.13rem' }}>
+          Voice:
+          <select
+            value={selectedVoice}
+            onChange={e => setSelectedVoice(e.target.value as 'Aria' | 'Matthew')}
+            style={{
+              marginLeft: '0.7rem',
+              padding: '0.6rem 1.2rem',
+              borderRadius: '12px',
+              border: '2.5px solid #2196f3',
+              background: 'rgba(255,255,255,0.28)',
+              fontSize: '1.13rem',
+              color: '#1b5e20',
+              fontWeight: 600,
+              outline: 'none',
+              minWidth: '120px',
+              boxShadow: '0 2px 8px rgba(33,150,243,0.08)',
+            }}
+          >
+            <option value="Aria">Aria (Girl)</option>
+            <option value="Matthew">Matthew (Boy)</option>
+          </select>
+        </label>
       </div>
 
       {/* Centered chat box */}
@@ -677,6 +749,39 @@ const App: React.FC = () => {
               <span style={{ fontSize: '1.3rem' }}>💬</span>
               Send
             </button>
+            {/* Play Response button for latest AI message */}
+            <button
+              onClick={handlePlayTTS}
+              disabled={!messages.some(m => m.role === 'solace')}
+              style={{
+                padding: '1.2rem 2.1rem',
+                borderRadius: '22px',
+                border: 'none',
+                background: (!messages.some(m => m.role === 'solace')) ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #7e57c2 0%, #9575cd 100%)',
+                color: (!messages.some(m => m.role === 'solace')) ? '#9e9e9e' : '#ffffff',
+                fontSize: '1.13rem',
+                fontWeight: '700',
+                cursor: (!messages.some(m => m.role === 'solace')) ? 'not-allowed' : 'pointer',
+                boxShadow: (!messages.some(m => m.role === 'solace')) ? 'none' : '0 16px 36px rgba(126, 87, 194, 0.22)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.8rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.13)',
+                filter: (!messages.some(m => m.role === 'solace')) ? 'none' : 'brightness(1.08) drop-shadow(0 2px 8px #9575cd88)',
+                borderTop: (!messages.some(m => m.role === 'solace')) ? 'none' : '2.5px solid #5e35b1',
+                borderBottom: (!messages.some(m => m.role === 'solace')) ? 'none' : '2.5px solid #5e35b1',
+                borderLeft: (!messages.some(m => m.role === 'solace')) ? 'none' : '2.5px solid #5e35b1',
+                borderRight: (!messages.some(m => m.role === 'solace')) ? 'none' : '2.5px solid #5e35b1',
+                transition: 'background 0.2s',
+              }}
+            >
+              <span style={{ fontSize: '1.3rem' }}>🔊</span>
+              Play Response
+            </button>
+            {/* Audio element for playback */}
+            {ttsAudioUrl && (
+              <audio ref={audioRef} src={ttsAudioUrl} autoPlay style={{ display: 'none' }} />
+            )}
           </div>
           {/* Status/Error */}
           <div style={{
