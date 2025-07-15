@@ -40,7 +40,6 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [chatResponse, setChatResponse] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [speechDetected, setSpeechDetected] = useState(false);
@@ -49,6 +48,8 @@ const App: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const [messages, setMessages] = useState<{role: 'user'|'solace', text: string}[]>([]);
+  const [pendingTranscript, setPendingTranscript] = useState<string | null>(null);
 
   // Load available audio devices
   useEffect(() => {
@@ -74,138 +75,26 @@ const App: React.FC = () => {
     };
   }, [selectedDeviceId]);
 
-  // Audio level visualization
-  useEffect(() => {
-    if (recording && audioContextRef.current && analyserRef.current) {
-      const updateAudioLevel = () => {
-        const dataArray = new Uint8Array(analyserRef.current!.frequencyBinCount);
-        analyserRef.current!.getByteFrequencyData(dataArray);
-        
-        // Calculate average level
-        const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-        setAudioLevel(average);
-        
-        animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
-      };
-      
-      updateAudioLevel();
-    } else {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-      setAudioLevel(0);
-    }
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [recording]);
-
-  // Test microphone
-  const handleTestMicrophone = async () => {
-    setStatus('Testing microphone...');
-    setError(null);
-    try {
-      // List all audio devices
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = devices.filter(device => device.kind === 'audioinput');
-      console.log('=== MICROPHONE TEST ===');
-      console.log('Available audio input devices:', audioInputs.map(d => ({ id: d.deviceId, label: d.label })));
-      console.log('Selected device ID:', selectedDeviceId);
-      
-      // Get microphone stream with selected device
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        } 
-      });
-      
-      const audioTrack = stream.getAudioTracks()[0];
-      console.log('Selected audio track:', {
-        label: audioTrack.label,
-        settings: audioTrack.getSettings(),
-        constraints: audioTrack.getConstraints(),
-        capabilities: audioTrack.getCapabilities()
-      });
-      
-      // Create audio context and analyze
-      const audioContext = new AudioContext({ sampleRate: 16000 });
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 2048;
-      source.connect(analyser);
-      
-      // Record for 3 seconds and analyze
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      const timeDataArray = new Float32Array(analyser.fftSize);
-      
-      let maxLevel = 0;
-      let sampleCount = 0;
-      const testDuration = 3000; // 3 seconds
-      const startTime = Date.now();
-      
-      const analyzeAudio = () => {
-        analyser.getByteFrequencyData(dataArray);
-        analyser.getFloatTimeDomainData(timeDataArray);
-        
-        const currentLevel = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-        maxLevel = Math.max(maxLevel, currentLevel);
-        sampleCount++;
-        
-        // Calculate RMS of time domain data
-        let rms = 0;
-        for (let i = 0; i < timeDataArray.length; i++) {
-          rms += timeDataArray[i] * timeDataArray[i];
-        }
-        rms = Math.sqrt(rms / timeDataArray.length);
-        
-        if (sampleCount % 10 === 0) { // Log every 10th sample
-          console.log(`Test: Level=${currentLevel}, RMS=${rms.toFixed(6)}, Max=${maxLevel}`);
-        }
-        
-        if (Date.now() - startTime < testDuration) {
-          requestAnimationFrame(analyzeAudio);
-        } else {
-          console.log('=== MICROPHONE TEST RESULTS ===');
-          console.log(`Max audio level: ${maxLevel}/255`);
-          console.log(`Average samples per second: ${sampleCount / (testDuration / 1000)}`);
-          console.log(`Final RMS: ${rms.toFixed(6)}`);
-          
-          setStatus(`Microphone test complete. Max level: ${maxLevel}/255`);
-          
-          // Clean up
-          stream.getTracks().forEach(track => track.stop());
-          audioContext.close();
-        }
-      };
-      
-      analyzeAudio();
-      
-    } catch (err) {
-      setError('Microphone test failed: ' + (err instanceof Error ? err.message : String(err)));
-      setStatus('Error');
-    }
-  };
-
   // Start recording
   const handleStart = async () => {
     setTranscript('');
     setStatus('Listening...');
     setError(null);
     setChatResponse('');
+    setPendingTranscript(null); // Clear preview bubble when starting new recording
     framesRef.current = [];
     setRecording(true);
     
     try {
+      // Ensure audio context is properly initialized
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      if (analyserRef.current) {
+        analyserRef.current = null;
+      }
+      
       // Set up audio visualization with selected device
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -218,6 +107,7 @@ const App: React.FC = () => {
         } 
       });
       
+      // Create audio context for visualization
       audioContextRef.current = new AudioContext({ sampleRate: 16000 });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
@@ -230,7 +120,7 @@ const App: React.FC = () => {
         frameDuration: 30,
         deviceId: selectedDeviceId 
       });
-      console.log('Starting VAD loop...');
+      
       let frameCount = 0;
       let stopRequested = false;
       let lastSpeechFrame = 0;
@@ -239,13 +129,10 @@ const App: React.FC = () => {
       const speechTimeout = 20; // Continue recording for 20 frames after last speech
       
       for await (const { frame } of vad) {
-        console.log('VAD loop: received frame, recording =', recording);
-        console.log('VAD loop: pushing frame to framesRef');
         framesRef.current.push(frame);
         frameCount++;
         lastSpeechFrame = frameCount;
         setSpeechDetected(true); // Speech is being detected
-        console.log('VAD loop: frame pushed, total frames =', framesRef.current.length);
         
         // Add a small delay to ensure frames are collected
         await new Promise(resolve => setTimeout(resolve, 10));
@@ -253,7 +140,6 @@ const App: React.FC = () => {
         // Update stop requested flag
         if (!recording && !stopRequested) {
           stopRequested = true;
-          console.log('VAD loop: stop requested, continuing to collect speech frames...');
         }
         
         // Stop conditions:
@@ -261,13 +147,11 @@ const App: React.FC = () => {
         // 2. We've collected maximum frames
         if ((stopRequested && frameCount >= minFrames && (frameCount - lastSpeechFrame) >= speechTimeout) || 
             frameCount >= maxFrames) {
-          console.log('VAD loop: stopping recording - frames:', frameCount, 'last speech:', lastSpeechFrame);
           break;
         }
       }
       
       setSpeechDetected(false); // No more speech detected
-      console.log('VAD loop: finished, total frames collected =', framesRef.current.length);
       
       // Clean up audio visualization
       if (audioContextRef.current) {
@@ -280,6 +164,13 @@ const App: React.FC = () => {
       setError('Microphone error: ' + (err instanceof Error ? err.message : String(err)));
       setRecording(false);
       setStatus('Error');
+      
+      // Clean up on error
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      analyserRef.current = null;
     }
   };
 
@@ -309,6 +200,13 @@ const App: React.FC = () => {
       const formData = new FormData();
       formData.append('file', wavBlob, 'audio.wav');
       formData.append('model', 'whisper-1');
+      // Check for API key before making request
+      const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
+      if (!apiKey) {
+        setError('No OpenAI API key provided. Please set your API key.');
+        setStatus('Error');
+        return;
+      }
       // Debug: Log the API key
       console.log('API KEY (ASR):', process.env.REACT_APP_OPENAI_API_KEY);
       // Debug: Log the WAV Blob size
@@ -323,7 +221,7 @@ const App: React.FC = () => {
       const resp = await fetch(ASR_API_URL, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${process.env.REACT_APP_OPENAI_API_KEY || ''}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: formData
       });
@@ -345,7 +243,18 @@ const App: React.FC = () => {
   };
 
   // Send transcript to chatbot
-  const handleChat = async () => {
+  const handleChat = async (userTranscript: string) => {
+    if (!userTranscript || !userTranscript.trim()) {
+      setError('Transcript is empty.');
+      return;
+    }
+    // Check for API key before making request
+    const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
+    if (!apiKey) {
+      setError('No OpenAI API key provided. Please set your API key.');
+      setStatus('Error');
+      return;
+    }
     setChatLoading(true);
     setChatResponse('');
     setStatus('Chatting...');
@@ -357,13 +266,13 @@ const App: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.REACT_APP_OPENAI_API_KEY || ''}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: 'gpt-3.5-turbo',
           messages: [
             { role: 'system', content: 'You are a helpful, empathetic voice companion.' },
-            { role: 'user', content: transcript }
+            { role: 'user', content: userTranscript }
           ]
         })
       });
@@ -379,15 +288,66 @@ const App: React.FC = () => {
     }
   };
 
+  // Test microphone
+  const handleTestMicrophone = async () => {
+    setStatus('Testing microphone...');
+    setError(null);
+    try {
+      // List all audio devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(device => device.kind === 'audioinput');
+      // Get microphone stream with selected device
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        } 
+      });
+      // Just test if we can access the mic and stop
+      stream.getTracks().forEach(track => track.stop());
+      setStatus('Microphone test complete.');
+    } catch (err) {
+      setError('Microphone test failed: ' + (err instanceof Error ? err.message : String(err)));
+      setStatus('Error');
+    }
+  };
+
+  // When transcript updates, show preview bubble only (do not add to chat)
+  useEffect(() => {
+    if (transcript) {
+      setPendingTranscript(transcript);
+    }
+  }, [transcript]);
+  // When chatResponse updates, add to chat log
+  useEffect(() => {
+    if (chatResponse) {
+      setMessages((msgs) => [...msgs, { role: 'solace', text: chatResponse }]);
+    }
+  }, [chatResponse]);
+
+  // Update handleSendTranscript to add user message, clear preview, and trigger AI
+  const handleSendTranscript = () => {
+    if (pendingTranscript && pendingTranscript.trim()) {
+      setMessages((msgs) => [...msgs, { role: 'user', text: pendingTranscript }]);
+      setTranscript(pendingTranscript);
+      setPendingTranscript(null);
+      handleChat(pendingTranscript); // Pass the transcript to the AI
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 25%, #a5d6a7 50%, #81c784 75%, #66bb6a 100%)',
       fontFamily: '"Fredoka One", "Comic Sans MS", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
     }}>
-      {/* Nature Background Elements */}
+      {/* Floating leaves background */}
       <div style={{
         position: 'absolute',
         top: 0,
@@ -397,554 +357,353 @@ const App: React.FC = () => {
         pointerEvents: 'none',
         zIndex: 0
       }}>
-        {/* Floating leaves */}
-        <div style={{
-          position: 'absolute',
-          top: '10%',
-          left: '5%',
-          fontSize: '48px',
-          color: 'rgba(76, 175, 80, 0.4)',
-          animation: 'float 8s ease-in-out infinite',
-          transform: 'rotate(15deg)',
-          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
-        }}>🍃</div>
-        <div style={{
-          position: 'absolute',
-          top: '20%',
-          right: '10%',
-          fontSize: '40px',
-          color: 'rgba(76, 175, 80, 0.5)',
-          animation: 'float 10s ease-in-out infinite reverse',
-          transform: 'rotate(-20deg)',
-          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
-        }}>🌿</div>
-        <div style={{
-          position: 'absolute',
-          bottom: '15%',
-          left: '15%',
-          fontSize: '36px',
-          color: 'rgba(76, 175, 80, 0.4)',
-          animation: 'float 9s ease-in-out infinite',
-          transform: 'rotate(45deg)',
-          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
-        }}>🍃</div>
-        <div style={{
-          position: 'absolute',
-          bottom: '25%',
-          right: '5%',
-          fontSize: '44px',
-          color: 'rgba(76, 175, 80, 0.5)',
-          animation: 'float 11s ease-in-out infinite reverse',
-          transform: 'rotate(-30deg)',
-          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
-        }}>🌿</div>
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          fontSize: '52px',
-          color: 'rgba(76, 175, 80, 0.3)',
-          animation: 'float 12s ease-in-out infinite',
-          transform: 'translate(-50%, -50%) rotate(60deg)',
-          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
-        }}>🍃</div>
+        <div style={{ position: 'absolute', top: '10%', left: '5%', fontSize: '48px', color: 'rgba(76, 175, 80, 0.4)', animation: 'float 8s ease-in-out infinite', transform: 'rotate(15deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
+        <div style={{ position: 'absolute', top: '20%', right: '10%', fontSize: '40px', color: 'rgba(76, 175, 80, 0.5)', animation: 'float 10s ease-in-out infinite reverse', transform: 'rotate(-20deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🌿</div>
+        <div style={{ position: 'absolute', bottom: '15%', left: '15%', fontSize: '36px', color: 'rgba(76, 175, 80, 0.4)', animation: 'float 9s ease-in-out infinite', transform: 'rotate(45deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
+        <div style={{ position: 'absolute', bottom: '25%', right: '5%', fontSize: '44px', color: 'rgba(76, 175, 80, 0.5)', animation: 'float 11s ease-in-out infinite reverse', transform: 'rotate(-30deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🌿</div>
+        <div style={{ position: 'absolute', top: '50%', left: '50%', fontSize: '52px', color: 'rgba(76, 175, 80, 0.3)', animation: 'float 12s ease-in-out infinite', transform: 'translate(-50%, -50%) rotate(60deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
       </div>
 
-      {/* Main Content */}
+      {/* Mic dropdown at top left */}
+      <div style={{
+        position: 'absolute',
+        top: 24,
+        left: 24,
+        zIndex: 2,
+        minWidth: 340,
+        maxWidth: 420,
+        background: 'rgba(255,255,255,0.22)',
+        borderRadius: '16px',
+        padding: '0.8rem 1.2rem 0.8rem 1.2rem',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.13)',
+        border: '2.5px solid rgba(76, 175, 80, 0.22)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        height: 'fit-content',
+      }}>
+        <div style={{
+          fontSize: '1.13rem',
+          fontWeight: 600,
+          color: '#1b5e20',
+          marginBottom: '0.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+        }}>
+          <span role="img" aria-label="mic">🎤</span> Mic
+        </div>
+        <select 
+          value={selectedDeviceId} 
+          onChange={(e) => setSelectedDeviceId(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '0.6rem',
+            borderRadius: '10px',
+            border: '2.5px solid rgba(76, 175, 80, 0.35)',
+            background: 'rgba(255,255,255,0.28)',
+            fontSize: '1.05rem',
+            color: '#1b5e20',
+            outline: 'none',
+            marginBottom: '0.7rem',
+            fontWeight: 500,
+          }}
+          disabled={recording}
+        >
+          {audioDevices.map(device => (
+            <option key={device.deviceId} value={device.deviceId} style={{ background: '#e8f5e8' }}>
+              {device.label || `Microphone ${device.deviceId.slice(0, 8)}...`}
+            </option>
+          ))}
+        </select>
+        <button 
+          onClick={handleTestMicrophone} 
+          disabled={recording}
+          style={{
+            padding: '0.7rem 1.2rem',
+            borderRadius: '12px',
+            border: 'none',
+            background: recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 50%, #ffcc80 100%)',
+            color: recording ? '#9e9e9e' : '#ffffff',
+            fontSize: '1.05rem',
+            fontWeight: '700',
+            cursor: recording ? 'not-allowed' : 'pointer',
+            marginTop: '0.2rem',
+            marginBottom: '0.2rem',
+            boxShadow: recording ? 'none' : '0 8px 24px rgba(255, 152, 0, 0.18)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            filter: 'brightness(1.08) drop-shadow(0 2px 8px #ffb74d88)',
+          }}
+        >
+          <span style={{ fontSize: '1.15rem' }}>🎯</span> Test
+        </button>
+      </div>
+
+      {/* Centered chat box */}
       <div style={{
         position: 'relative',
         zIndex: 1,
-        maxWidth: 900,
         margin: '0 auto',
-        padding: '2rem',
-        minHeight: '100vh',
+        marginTop: '2.5rem',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center'
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '88vh',
+        height: '88vh',
+        maxWidth: 700,
+        width: '100%',
       }}>
-        {/* Header */}
         <div style={{
-          textAlign: 'center',
-          marginBottom: '3rem'
+          background: 'rgba(255,255,255,0.72)',
+          borderRadius: '32px',
+          boxShadow: '0 32px 64px rgba(0, 0, 0, 0.18), 0 2px 0 rgba(255, 255, 255, 0.18)',
+          border: '3.5px solid #2e7d32',
+          padding: '2.5rem 2.2rem 1.5rem 2.2rem',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
+          backdropFilter: 'blur(18px)',
         }}>
+          {/* Header */}
           <div style={{
-            fontSize: '4rem',
-            marginBottom: '0.5rem',
-            color: '#2e7d32',
-            fontWeight: 'bold',
-            textShadow: '0 4px 8px rgba(0,0,0,0.3), 0 0 20px rgba(76,175,80,0.3)',
-            animation: 'glow 3s ease-in-out infinite alternate'
-          }}>
-            🍀 Solace
-          </div>
-          <div style={{
-            fontSize: '1.4rem',
-            color: '#1b5e20',
-            marginBottom: '1rem',
-            fontWeight: '400',
-            textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-          }}>
-            Your AI Companion for Emotional Wellness
-          </div>
-          <div style={{
-            width: '80px',
-            height: '4px',
-            background: 'linear-gradient(90deg, #2e7d32, #4caf50)',
-            margin: '0 auto',
-            borderRadius: '2px',
-            boxShadow: '0 2px 8px rgba(76,175,80,0.3)'
-          }}></div>
-        </div>
-
-        {/* Main Card */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.25)',
-          borderRadius: '25px',
-          padding: '3rem',
-          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
-          border: '3px solid rgba(76, 175, 80, 0.4)',
-          backdropFilter: 'blur(20px)'
-        }}>
-          {/* Device Selection */}
-          <div style={{
-            marginBottom: '2rem',
-            padding: '2rem',
-            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
-            borderRadius: '20px',
-            border: '3px solid rgba(76, 175, 80, 0.5)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+            textAlign: 'center',
+            marginBottom: '1.2rem',
           }}>
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              marginBottom: '1rem'
+              fontSize: '2.2rem',
+              color: '#2e7d32',
+              fontWeight: 'bold',
+              textShadow: '0 4px 8px rgba(0,0,0,0.13), 0 0 20px rgba(76,175,80,0.13)',
+              animation: 'glow 3s ease-in-out infinite alternate',
+              marginBottom: '0.1rem',
             }}>
-              <span style={{
-                fontSize: '1.5rem',
-                marginRight: '0.8rem',
-                color: '#2e7d32',
-                animation: 'pulse 2s ease-in-out infinite'
-              }}>🎤</span>
-              <label style={{
-                fontWeight: '600',
-                color: '#1b5e20',
-                fontSize: '1.2rem',
-                textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-              }}>
-                Microphone Selection
-              </label>
+              🍀 Solace
             </div>
-            <select 
-              value={selectedDeviceId} 
-              onChange={(e) => setSelectedDeviceId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '1rem',
-                borderRadius: '15px',
-                border: '3px solid rgba(76, 175, 80, 0.6)',
-                background: 'rgba(255, 255, 255, 0.2)',
-                fontSize: '1rem',
-                color: '#1b5e20',
-                outline: 'none',
-                transition: 'all 0.3s ease',
-                cursor: 'pointer',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '500'
-              }}
-              disabled={recording}
-            >
-              {audioDevices.map(device => (
-                <option key={device.deviceId} value={device.deviceId} style={{ background: '#e8f5e8' }}>
-                  {device.label || `Microphone ${device.deviceId.slice(0, 8)}...`}
-                </option>
-              ))}
-            </select>
+            <div style={{
+              fontSize: '1.13rem',
+              color: '#1b5e20',
+              fontWeight: '400',
+              textShadow: '0 2px 4px rgba(0,0,0,0.08)',
+            }}>
+              Your AI Companion for Emotional Wellness
+            </div>
           </div>
-
+          {/* Chat Log */}
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.1rem',
+            marginBottom: '1.2rem',
+            width: '100%',
+            maxWidth: '100%',
+          }}>
+            {messages.length === 0 && (
+              <div style={{ color: '#888', textAlign: 'center', marginTop: '2rem', fontSize: '1.1rem' }}>
+                Start a conversation with Solace!
+              </div>
+            )}
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                style={{
+                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '90%',
+                  minWidth: '60px',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                  background: msg.role === 'user'
+                    ? 'linear-gradient(135deg, rgba(33, 150, 243, 0.92) 0%, rgba(66, 165, 245, 0.92) 100%)'
+                    : 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(220,220,220,0.92) 100%)',
+                  color: msg.role === 'user' ? '#fff' : '#1b5e20',
+                  borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                  padding: '1.1rem 1.3rem',
+                  marginBottom: '0.1rem',
+                  fontWeight: 500,
+                  fontSize: '1.13rem',
+                  boxShadow: msg.role === 'user'
+                    ? '0 2px 16px 0 rgba(33,150,243,0.13), 0 2px 0 rgba(255,255,255,0.18)'
+                    : '0 2px 16px 0 rgba(180,180,180,0.13), 0 2px 0 rgba(255,255,255,0.18)',
+                  position: 'relative',
+                  backdropFilter: 'blur(10px)',
+                }}
+              >
+                {msg.role === 'solace' && (
+                  <span style={{ position: 'absolute', left: '-2.2rem', top: '0.2rem', fontSize: '1.3rem' }}>🤖</span>
+                )}
+                {msg.role === 'user' && (
+                  <span style={{ position: 'absolute', right: '-2.2rem', top: '0.2rem', fontSize: '1.3rem' }}>🧑‍💻</span>
+                )}
+                {msg.text}
+              </div>
+            ))}
+            {/* Pending transcript preview bubble */}
+            {pendingTranscript && (
+              <div
+                style={{
+                  alignSelf: 'flex-end',
+                  maxWidth: '90%',
+                  minWidth: '60px',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                  background: 'linear-gradient(135deg, rgba(33, 150, 243, 0.98) 0%, rgba(66, 165, 245, 0.98) 100%)',
+                  color: '#fff',
+                  borderRadius: '18px 18px 4px 18px',
+                  padding: '1.1rem 1.3rem',
+                  marginBottom: '0.1rem',
+                  fontWeight: 600,
+                  fontSize: '1.13rem',
+                  boxShadow: '0 2px 20px 0 rgba(33,150,243,0.18), 0 2px 0 rgba(255,255,255,0.22)',
+                  position: 'relative',
+                  backdropFilter: 'blur(12px)',
+                  border: '2.5px solid #2196f3',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.7rem',
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: '1.08rem', marginBottom: '0.3rem' }}>
+                  Here's what you said in your latest voice recording:
+                </span>
+                <span style={{ fontStyle: 'italic', fontWeight: 500, fontSize: '1.13rem', color: '#e3f2fd' }}>
+                  "{pendingTranscript}"
+                </span>
+                <span style={{ fontWeight: 500, fontSize: '1.01rem', color: '#e3f2fd', marginBottom: '0.2rem' }}>
+                  Click <b>Send</b> if you would like to send this to your Solace!
+                </span>
+              </div>
+            )}
+          </div>
           {/* Controls */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '1.5rem',
-            marginBottom: '2rem'
+            display: 'flex',
+            flexDirection: 'row',
+            gap: '1.2rem',
+            alignItems: 'center',
+            marginTop: '0.5rem',
+            justifyContent: 'center', // Add this line to center the buttons
+            width: '100%', // Ensure it takes full width
           }}>
             <button 
               onClick={handleStart} 
               disabled={recording}
               style={{
-                padding: '1.2rem 1.8rem',
-                borderRadius: '20px',
+                padding: '1.2rem 2.1rem',
+                borderRadius: '22px',
                 border: 'none',
-                background: recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #4caf50 0%, #66bb6a 50%, #81c784 100%)',
+                background: recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)',
                 color: recording ? '#9e9e9e' : '#ffffff',
-                fontSize: '1.1rem',
+                fontSize: '1.13rem',
                 fontWeight: '700',
                 cursor: recording ? 'not-allowed' : 'pointer',
-                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                boxShadow: recording ? 'none' : '0 12px 30px rgba(76, 175, 80, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                boxShadow: recording ? 'none' : '0 16px 36px rgba(76, 175, 80, 0.22)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
                 gap: '0.8rem',
-                position: 'relative',
-                overflow: 'hidden',
-                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                textShadow: '0 2px 4px rgba(0,0,0,0.13)',
+                filter: 'brightness(1.08) drop-shadow(0 2px 8px #66bb6a88)',
+                borderTop: '2.5px solid #388e3c',
+                borderBottom: '2.5px solid #388e3c',
+                borderLeft: '2.5px solid #388e3c',
+                borderRight: '2.5px solid #388e3c',
+                transition: 'background 0.2s',
               }}
             >
-              <span style={{ 
-                fontSize: '1.4rem',
-                animation: recording ? 'spin 2s linear infinite' : 'bounce 2s ease-in-out infinite'
-              }}>🎙️</span>
+              <span style={{ fontSize: '1.3rem' }}>🎙️</span>
               {recording ? 'Recording...' : 'Start Talking'}
             </button>
-            
             <button 
               onClick={handleStop} 
               disabled={!recording}
               style={{
-                padding: '1.2rem 1.8rem',
-                borderRadius: '20px',
+                padding: '1.2rem 2.1rem',
+                borderRadius: '22px',
                 border: 'none',
-                background: !recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #f44336 0%, #ef5350 50%, #e57373 100%)',
+                background: !recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #f44336 0%, #ef5350 100%)',
                 color: !recording ? '#9e9e9e' : '#ffffff',
-                fontSize: '1.1rem',
+                fontSize: '1.13rem',
                 fontWeight: '700',
                 cursor: !recording ? 'not-allowed' : 'pointer',
-                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                boxShadow: !recording ? 'none' : '0 12px 30px rgba(244, 67, 54, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                boxShadow: !recording ? 'none' : '0 16px 36px rgba(244, 67, 54, 0.22)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
                 gap: '0.8rem',
-                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                textShadow: '0 2px 4px rgba(0,0,0,0.13)',
+                filter: 'brightness(1.08) drop-shadow(0 2px 8px #ef535088)',
+                borderTop: '2.5px solid #b71c1c',
+                borderBottom: '2.5px solid #b71c1c',
+                borderLeft: '2.5px solid #b71c1c',
+                borderRight: '2.5px solid #b71c1c',
+                transition: 'background 0.2s',
               }}
             >
-              <span style={{ 
-                fontSize: '1.4rem',
-                animation: !recording ? 'none' : 'pulse 1s ease-in-out infinite'
-              }}>⏹️</span>
-              Stop Recording
+              <span style={{ fontSize: '1.3rem' }}>⏹️</span>
+              Stop
             </button>
-            
             <button 
-              onClick={handleChat} 
-              disabled={!transcript || chatLoading}
+              onClick={handleSendTranscript} 
+              disabled={!pendingTranscript}
               style={{
-                padding: '1.2rem 1.8rem',
-                borderRadius: '20px',
+                padding: '1.2rem 2.1rem',
+                borderRadius: '22px',
                 border: 'none',
-                background: (!transcript || chatLoading) ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #2196f3 0%, #42a5f5 50%, #64b5f6 100%)',
-                color: (!transcript || chatLoading) ? '#9e9e9e' : '#ffffff',
-                fontSize: '1.1rem',
+                background: (!pendingTranscript) ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #2196f3 0%, #42a5f5 100%)',
+                color: (!pendingTranscript) ? '#9e9e9e' : '#ffffff',
+                fontSize: '1.13rem',
                 fontWeight: '700',
-                cursor: (!transcript || chatLoading) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                boxShadow: (!transcript || chatLoading) ? 'none' : '0 12px 30px rgba(33, 150, 243, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                cursor: (!pendingTranscript) ? 'not-allowed' : 'pointer',
+                boxShadow: (!pendingTranscript) ? 'none' : '0 16px 36px rgba(33, 150, 243, 0.22)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
                 gap: '0.8rem',
-                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                textShadow: '0 2px 4px rgba(0,0,0,0.13)',
+                filter: (!pendingTranscript) ? 'none' : 'brightness(1.08) drop-shadow(0 2px 8px #42a5f588)',
+                borderTop: (!pendingTranscript) ? 'none' : '2.5px solid #1976d2',
+                borderBottom: (!pendingTranscript) ? 'none' : '2.5px solid #1976d2',
+                borderLeft: (!pendingTranscript) ? 'none' : '2.5px solid #1976d2',
+                borderRight: (!pendingTranscript) ? 'none' : '2.5px solid #1976d2',
+                transition: 'background 0.2s',
               }}
             >
-              <span style={{ 
-                fontSize: '1.4rem',
-                animation: chatLoading ? 'spin 1s linear infinite' : 'wiggle 3s ease-in-out infinite'
-              }}>💬</span>
-              {chatLoading ? 'Thinking...' : 'Send to Chatbot'}
+              <span style={{ fontSize: '1.3rem' }}>💬</span>
+              Send
             </button>
           </div>
-
-          {/* Status and Test Microphone - Same level, same size */}
+          {/* Status/Error */}
           <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '1.5rem',
-            marginBottom: '2rem'
+            marginTop: '1.2rem',
+            textAlign: 'center',
           }}>
-            {/* Status Box */}
-            <div style={{
-              padding: '1.2rem 1.8rem',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
-              borderRadius: '20px',
-              border: '3px solid rgba(76, 175, 80, 0.5)',
-              textAlign: 'center',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '220px',
-              height: '60px',
-              boxSizing: 'border-box'
+            <span style={{
+              fontSize: '1rem',
+              color: error ? '#d32f2f' : '#1b5e20',
+              fontWeight: '600',
+              textShadow: '0 2px 4px rgba(0,0,0,0.08)'
             }}>
-              <div style={{
-                fontSize: '1rem',
-                color: '#1b5e20',
-                fontWeight: '600',
-                textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-              }}>
-                Status: {status}
-              </div>
-            </div>
-
-            {/* Test Microphone Button */}
-            <button 
-              onClick={handleTestMicrophone} 
-              disabled={recording}
-              style={{
-                padding: '1.2rem 1.8rem',
-                borderRadius: '20px',
-                border: 'none',
-                background: recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 50%, #ffcc80 100%)',
-                color: recording ? '#9e9e9e' : '#ffffff',
-                fontSize: '1.1rem',
-                fontWeight: '700',
-                cursor: recording ? 'not-allowed' : 'pointer',
-                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                boxShadow: recording ? 'none' : '0 12px 30px rgba(255, 152, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.8rem',
-                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                width: '220px',
-                height: '60px',
-                boxSizing: 'border-box'
-              }}
-            >
-              <span style={{ 
-                fontSize: '1.4rem',
-                animation: recording ? 'none' : 'shake 2s ease-in-out infinite'
-              }}>🎯</span>
-              Test Microphone
-            </button>
-          </div>
-
-          {/* Audio Visualization */}
-          {recording && (
-            <div style={{
-              marginBottom: '2rem',
-              padding: '2rem',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
-              borderRadius: '20px',
-              border: '3px solid rgba(76, 175, 80, 0.5)',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: '1.5rem'
-              }}>
-                <span style={{
-                  fontSize: '1.5rem',
-                  marginRight: '0.8rem',
-                  color: '#2e7d32',
-                  animation: 'pulse 1.5s ease-in-out infinite'
-                }}>📊</span>
-                <span style={{
-                  fontWeight: '600',
-                  color: '#1b5e20',
-                  fontSize: '1.2rem',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                }}>
-                  Audio Level
-                </span>
-              </div>
-              
-              <div style={{
-                width: '100%',
-                height: '30px',
-                background: 'rgba(255, 255, 255, 0.3)',
-                borderRadius: '15px',
-                overflow: 'hidden',
-                border: '3px solid rgba(76, 175, 80, 0.6)',
-                position: 'relative'
-              }}>
-                <div style={{
-                  width: `${(audioLevel / 255) * 100}%`,
-                  height: '100%',
-                  background: audioLevel > 50 ? 'linear-gradient(90deg, #4caf50, #66bb6a)' : 'linear-gradient(90deg, #ff9800, #ffb74d)',
-                  transition: 'width 0.1s ease',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                }} />
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: '1rem',
-                fontSize: '0.9rem',
-                color: '#1b5e20',
-                textShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                fontWeight: '500'
-              }}>
-                <span>Level: {audioLevel} / 255</span>
-                <span style={{
-                  animation: speechDetected ? 'pulse 1s ease-in-out infinite' : 'none'
-                }}>
-                  {speechDetected ? '🎤 Detecting speech...' : '👂 Listening...'}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Transcript and Response */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
-            gap: '2.5rem'
-          }}>
-            {/* Transcript */}
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
-              borderRadius: '20px',
-              padding: '2rem',
-              border: '3px solid rgba(76, 175, 80, 0.5)',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: '1.5rem'
-              }}>
-                <span style={{
-                  fontSize: '1.5rem',
-                  marginRight: '0.8rem',
-                  color: '#2e7d32',
-                  animation: 'bounce 2s ease-in-out infinite'
-                }}>📝</span>
-                <span style={{
-                  fontWeight: '600',
-                  color: '#1b5e20',
-                  fontSize: '1.2rem',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                }}>
-                  Your Message
-                </span>
-              </div>
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                padding: '1.5rem',
-                borderRadius: '15px',
-                minHeight: '120px',
-                border: '3px solid rgba(76, 175, 80, 0.4)',
-                fontSize: '1rem',
-                color: '#1b5e20',
-                lineHeight: '1.6',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '500'
-              }}>
-                {transcript || 'Your transcribed speech will appear here...'}
-              </div>
-            </div>
-
-            {/* Chatbot Response */}
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(33, 150, 243, 0.3) 0%, rgba(156, 39, 176, 0.3) 100%)',
-              borderRadius: '20px',
-              padding: '2rem',
-              border: '3px solid rgba(76, 175, 80, 0.5)',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: '1.5rem'
-              }}>
-                <span style={{
-                  fontSize: '1.5rem',
-                  marginRight: '0.8rem',
-                  color: '#2e7d32',
-                  animation: 'wiggle 3s ease-in-out infinite'
-                }}>🤖</span>
-                <span style={{
-                  fontWeight: '600',
-                  color: '#1b5e20',
-                  fontSize: '1.2rem',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                }}>
-                  Your Solace's Response
-                </span>
-              </div>
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                padding: '1.5rem',
-                borderRadius: '15px',
-                minHeight: '120px',
-                border: '3px solid rgba(76, 175, 80, 0.4)',
-                fontSize: '1rem',
-                color: '#1b5e20',
-                lineHeight: '1.6',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '500'
-              }}>
-                {chatResponse || 'Your Solace\'s response will appear here...'}
-              </div>
-            </div>
+              {error ? `Error: ${error}` : `Status: ${status}`}
+            </span>
           </div>
         </div>
       </div>
-
       {/* CSS Animations */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&display=swap');
-        
         @keyframes float {
           0%, 100% { transform: translateY(0px) rotate(15deg); }
           50% { transform: translateY(-30px) rotate(15deg); }
         }
-        
         @keyframes glow {
-          0% { text-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 20px rgba(76,175,80,0.3); }
-          100% { text-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 30px rgba(76,175,80,0.6); }
-        }
-        
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.1); }
-        }
-        
-        @keyframes bounce {
-          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-          40% { transform: translateY(-10px); }
-          60% { transform: translateY(-5px); }
-        }
-        
-        @keyframes wiggle {
-          0%, 7% { transform: rotateZ(0); }
-          15% { transform: rotateZ(-15deg); }
-          20% { transform: rotateZ(10deg); }
-          25% { transform: rotateZ(-10deg); }
-          30% { transform: rotateZ(6deg); }
-          35% { transform: rotateZ(-4deg); }
-          40%, 100% { transform: rotateZ(0); }
-        }
-        
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-          20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-        
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        select:hover {
-          border-color: #4caf50 !important;
-          box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4) !important;
-          transform: translateY(-2px);
-        }
-        
-        button:hover:not(:disabled) {
-          transform: translateY(-4px) scale(1.02);
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
-        }
-        
-        button:active:not(:disabled) {
-          transform: translateY(-2px) scale(0.98);
+          0% { text-shadow: 0 4px 8px rgba(0,0,0,0.13), 0 0 20px rgba(76,175,80,0.13); }
+          100% { text-shadow: 0 4px 8px rgba(0,0,0,0.13), 0 0 30px rgba(76,175,80,0.18); }
         }
       `}</style>
     </div>
