@@ -393,6 +393,12 @@ const App: React.FC = () => {
 
   // Play TTS for latest AI message
   const handlePlayTTS = async () => {
+    if (audioRef.current && !audioRef.current.paused && !audioRef.current.ended) {
+      // If audio is playing, stop and reset, do not play again
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      return;
+    }
     const lastSolaceMsg = messages.filter(m => m.role === 'solace').slice(-1)[0];
     if (!lastSolaceMsg) return;
     setTtsAudioUrl(null);
@@ -401,7 +407,10 @@ const App: React.FC = () => {
     if (url) {
       setTtsAudioUrl(url);
       setTimeout(() => {
-        audioRef.current?.play();
+        if (audioRef.current) {
+          audioRef.current.playbackRate = 1.3; // Set TTS speed to 1.3x
+          audioRef.current.play();
+        }
       }, 100);
     }
   };
@@ -631,33 +640,35 @@ const App: React.FC = () => {
         position: 'relative',
         zIndex: 1,
         margin: '0 auto',
-        marginTop: '0.5rem', 
+        marginTop: '0.5rem',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '88vh', // was 87vh, 1 unit lower
-        height: '88vh', // was 87vh, 1 unit lower
+        height: '88vh',
         maxWidth: 900,
         width: '100%',
+        boxSizing: 'border-box',
       }}>
         <div style={{
           background: 'rgba(255,255,255,0.72)',
           borderRadius: '32px',
           boxShadow: '0 32px 64px rgba(0, 0, 0, 0.18), 0 2px 0 rgba(255, 255, 255, 0.18)',
           border: '3.5px solid #2e7d32',
-          padding: '2.5rem 2.2rem 1.5rem 2.2rem', 
+          padding: 0, // remove vertical padding
           width: '100%',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'flex-end',
+          justifyContent: 'flex-start',
           backdropFilter: 'blur(18px)',
+          boxSizing: 'border-box',
         }}>
-          {/* Header */}
+          {/* Header - always at top */}
           <div style={{
             textAlign: 'center',
-            marginBottom: '1.2rem',
+            margin: 0, // remove margin
+            padding: '1rem 2.2rem 0 2.2rem', // move header close to top
           }}>
             <div style={{
               fontSize: '2.2rem',
@@ -677,24 +688,26 @@ const App: React.FC = () => {
             }}>
               Your AI Companion for Emotional Wellness
             </div>
-          </div>
-          {/* Chat Log */}
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.1rem',
-            marginBottom: '1.2rem',
-            width: '100%',
-            maxWidth: '100%',
-          }}>
             {messages.length === 0 && (
               <div style={{ color: '#888', textAlign: 'center', marginTop: '2rem', fontSize: '1.1rem' }}>
                 Start a conversation with Solace!
               </div>
             )}
+          </div>
+          {/* Chat Log - scrollable */}
+          <div style={{
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.1rem',
+            margin: 0, // remove margin
+            padding: '0 1rem', // reduced horizontal padding
+            width: '100%',
+            maxWidth: '100%',
+            flex: 1,
+            boxSizing: 'border-box',
+          }}>
             {messages.map((msg, idx) => (
               <div
                 key={idx}
@@ -719,14 +732,9 @@ const App: React.FC = () => {
                     : '0 2px 16px 0 rgba(180,180,180,0.13), 0 2px 0 rgba(255,255,255,0.18)',
                   position: 'relative',
                   backdropFilter: 'blur(10px)',
+                  textAlign: msg.role === 'user' ? 'right' : 'left',
                 }}
               >
-                {msg.role === 'solace' && (
-                  <span style={{ position: 'absolute', left: '-2.2rem', top: '0.2rem', fontSize: '1.3rem' }}>🤖</span>
-                )}
-                {msg.role === 'user' && (
-                  <span style={{ position: 'absolute', right: '-2.2rem', top: '0.2rem', fontSize: '1.3rem' }}>🧑‍💻</span>
-                )}
                 {msg.text}
               </div>
             ))}
