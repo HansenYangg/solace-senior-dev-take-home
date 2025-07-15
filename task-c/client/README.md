@@ -1,46 +1,119 @@
-# Getting Started with Create React App
+# Task C: Solace Lite End-to-End Demo
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A minimal, privacy-preserving voice companion demo. Capture voice, transcribe to text, chat with an AI, and play back responses with customizable voices—all in your browser.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## Features
 
-### `npm start`
+- **Voice Capture & VAD:** Record your voice with real-time voice activity detection (VAD) using the @solace/client-sdk.
+- **ASR (Speech-to-Text):** Transcribe speech to text using OpenAI Whisper or another ASR API.
+- **Chatbot:** Send transcripts to OpenAI GPT-3.5/4 and receive intelligent responses.
+- **TTS (Text-to-Speech):** Play responses using AWS Polly (via a local proxy) with selectable voices.
+- **UI/UX:** Simple wireframe interface with buttons for Talk, Stop, Play Response, and a dropdown for voice selection.
+- **Error Handling:** All errors (mic, network, decryption, etc.) are surfaced in the UI.
+- **(Optional) Local Memory Layer:** Securely store the last 3 transcripts in encrypted form in your browser’s localStorage.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+---
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Setup
 
-### `npm test`
+### 1. Install Dependencies
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```sh
+cd task-c/client
+npm install
+```
 
-### `npm run build`
+### 2. Environment Variables
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Create a `.env` file in this directory (see `.env.example` for required variables):
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```env
+REACT_APP_OPENAI_API_KEY=your_openai_api_key
+REACT_APP_ASR_API_URL=https://api.openai.com/v1/audio/transcriptions
+REACT_APP_CHAT_API_URL=https://api.openai.com/v1/chat/completions
+# Add any other required variables here
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+**Note:** Do NOT commit secrets to version control.
 
-### `npm run eject`
+### 3. (Optional) Set Up Local Polly Proxy for TTS
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+To enable Text-to-Speech, run the local AWS Polly proxy:
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```sh
+# In the project root
+npm install express aws-sdk cors dotenv
+node polly-proxy.js
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+This will start a server at `http://localhost:5000/tts` used by the app for TTS.
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+---
 
-## Learn More
+## Running the Demo
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```sh
+npm start
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Usage
+
+- **Talk:** Click to start recording. Speak into your mic.
+- **Stop:** Click to stop and transcribe.
+- **Play Response:** Listen to the AI’s reply with your chosen voice.
+- **Voice Selection:** Choose between available voices (e.g., male/female).
+- **(Optional) Memory:** The last 3 transcripts are securely stored in your browser (encrypted).
+
+---
+
+## Local Memory Layer (Optional)
+
+The app can securely store your last 3 transcripts in the browser’s localStorage, encrypted using the @solace/client-sdk. This means your recent conversation history is private—even if someone accesses your device, they cannot read your transcripts without the decryption key.
+
+---
+
+## Tests
+
+To run tests (if implemented):
+
+```sh
+npm test
+```
+
+---
+
+## Environment Variables Reference
+
+- `REACT_APP_OPENAI_API_KEY` – Your OpenAI API key (required for ASR and chatbot)
+- `REACT_APP_ASR_API_URL` – ASR endpoint (default: OpenAI Whisper)
+- `REACT_APP_CHAT_API_URL` – Chatbot endpoint (default: OpenAI GPT)
+- (Add any others as needed)
+
+---
+
+## Security Notes
+
+- All sensitive data is encrypted before storage or transmission.
+- No secrets are committed to the repository.
+- IAM and API keys should be scoped with least privilege.
+
+---
+
+## Troubleshooting
+
+- **TTS not working?** Make sure the local Polly proxy is running.
+- **ASR/Chatbot errors?** Check your API keys and endpoints.
+- **Mic issues?** Ensure your browser has permission to access the microphone.
+
+---
+
+## License
+
+MIT (or your chosen license)
+
