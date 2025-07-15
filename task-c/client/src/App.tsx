@@ -80,6 +80,11 @@ const App: React.FC = () => {
   const [selectedVoice, setSelectedVoice] = useState<'Aria' | 'Matthew'>('Aria');
   // Add state for conversation history
   const [exchanges, setExchanges] = useState<ChatExchange[]>([]);
+  // Add audio objects for sent/received sounds
+  const sentSound = new Audio(process.env.PUBLIC_URL + '/sent.mp3');
+  sentSound.volume = 0.7;
+  const receivedSound = new Audio(process.env.PUBLIC_URL + '/received.mp3');
+  receivedSound.volume = 0.7;
 
   // Load available audio devices
   useEffect(() => {
@@ -370,6 +375,8 @@ const App: React.FC = () => {
   // When chatResponse updates, add to chat log
   useEffect(() => {
     if (chatResponse) {
+      receivedSound.currentTime = 0;
+      receivedSound.play();
       setMessages((msgs) => [...msgs, { role: 'solace', text: chatResponse }]);
     }
   }, [chatResponse]);
@@ -377,6 +384,8 @@ const App: React.FC = () => {
   // Update handleSendTranscript to add user message, clear preview, and trigger AI
   const handleSendTranscript = () => {
     if (pendingTranscript && pendingTranscript.trim()) {
+      sentSound.currentTime = 0;
+      sentSound.play();
       setMessages((msgs) => [...msgs, { role: 'user', text: pendingTranscript }]);
       setTranscript(pendingTranscript);
       setPendingTranscript(null);
