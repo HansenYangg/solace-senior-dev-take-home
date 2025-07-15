@@ -11,8 +11,11 @@ A secure client SDK for blob encryption (AES-GCM 256), voice activity detection 
 - **recordAndDetectVoice(): AsyncIterable<{ frame: ArrayBuffer; timestamp: number }>**
 - **uploadBlob(blob, apiUrl, token): Promise<string>**
 - **downloadAndDecrypt(blobKey, apiUrl, key): Promise<string>**
+- **uploadBlobToS3(blob, presignedUrl): Promise<void>**
+- **downloadBlobFromS3(presignedUrl): Promise<Blob>**
+- **detectVoiceActivity(buffer: Float32Array, sensitivity: number): boolean**
 - Web Crypto API (AES-GCM 256)
-- VAD via webrtcvad.js
+- VAD via energy-based detection (browser, no native dependencies)
 - React web demo app
 
 ---
@@ -66,6 +69,31 @@ const blobKey = await uploadBlob(blob, apiUrl, token);
 const plaintext = await downloadAndDecrypt(blobKey, apiUrl, key);
 ```
 
+### **uploadBlobToS3**
+```ts
+import { uploadBlobToS3 } from '@solace/client-sdk';
+await uploadBlobToS3(blob, presignedUrl); // PUTs blob to S3
+```
+
+### **downloadBlobFromS3**
+```ts
+import { downloadBlobFromS3 } from '@solace/client-sdk';
+const blob = await downloadBlobFromS3(presignedUrl); // GETs blob from S3
+```
+
+### **detectVoiceActivity**
+```ts
+import { detectVoiceActivity } from '@solace/client-sdk';
+const isVoice = detectVoiceActivity(float32PcmBuffer, sensitivity); // boolean
+```
+
+---
+
+## Node.js vs Browser Support
+- **Encryption/decryption**: Works in modern browsers (Web Crypto API). Node.js support requires `crypto.webcrypto` (Node 19+ or polyfill).
+- **VAD/Audio**: Only works in browsers (uses Web Audio API, getUserMedia).
+- **S3 helpers**: Work in both browser and Node.js (with `fetch` polyfill in Node).
+
 ---
 
 ## Demo App
@@ -86,11 +114,13 @@ npm start
 ---
 
 ## Testing
-- Unit tests for encryption/decryption (Jest)
-- Simulate VAD on prerecorded audio
+- Unit tests for encryption/decryption, VAD, and S3 helpers (Jest)
+- To run all tests:
 
 ```sh
-npm test
+cd task-B
+npm install
+npm run test
 ```
 
 ---
@@ -98,6 +128,15 @@ npm test
 ## Local Development
 - Build: `npm run build`
 - Lint: `npm run lint`
+- Test: `npm run test`
+
+---
+
+## Contributing & Development
+- PRs and issues welcome!
+- Please add/expand tests for new features.
+- For local development, see scripts above.
+- For questions, open an issue or contact the author.
 
 ---
 
@@ -111,4 +150,7 @@ npm test
 - [x] README with usage and demo instructions
 - [x] VAD configuration options (sensitivity, frame duration, sample rate)
 - [x] Real-time voice activity detection
-- [x] Audio processing and PCM conversion 
+- [x] Audio processing and PCM conversion
+- [x] S3 upload/download helpers with tests
+- [x] API documentation for all public functions
+- [x] Node.js/browser support notes 

@@ -1,8 +1,8 @@
+export {};
 // Test setup for browser APIs
 
 declare global {
   var global: any;
-  var jest: any;
   var Buffer: any;
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "@solace/client-sdk",
   "version": "0.1.0",
-  "description": "Solace client SDK for secure blob encryption and VAD-based audio capture.",
+  "description": "Solace client SDK for secure blob encryption, VAD-based audio capture, and S3 integration.",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
@@ -21,8 +21,31 @@
     "README.md",
     "LICENSE"
   ],
-  "author": "",
+  "author": "Your Name <your.email@example.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/solace-client-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/solace-client-sdk/issues"
+  },
+  "homepage": "https://github.com/yourusername/solace-client-sdk#readme",
+  "keywords": [
+    "encryption",
+    "audio",
+    "vad",
+    "voice-activity-detection",
+    "webrtc",
+    "s3",
+    "aws",
+    "blob",
+    "react",
+    "browser",
+    "nodejs",
+    "sdk",
+    "solace"
+  ],
   "dependencies": {
     "webrtcvad": "^1.0.0"
   },
@@ -34,6 +57,6 @@
     "@types/node": "^20.0.0",
     "@types/webrtcvad": "^1.0.0",
     "jest-environment-jsdom": "^29.0.0",
-        "ts-jest": "^29.0.0"
+    "ts-jest": "^29.0.0"
   }
 } 

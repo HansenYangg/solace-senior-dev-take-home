@@ -263,7 +263,7 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
  * Simple energy-based voice activity detection.
  * In a production environment, use webrtcvad for better accuracy.
  */
-function detectVoiceActivity(buffer: Float32Array, sensitivity: number): boolean {
+export function detectVoiceActivity(buffer: Float32Array, sensitivity: number): boolean {
   // Calculate RMS (Root Mean Square) energy
   let sum = 0;
   for (let i = 0; i < buffer.length; i++) {
