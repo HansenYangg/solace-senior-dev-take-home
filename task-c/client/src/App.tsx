@@ -380,85 +380,573 @@ const App: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: '2rem auto', padding: 24, border: '1px solid #ccc', borderRadius: 8 }}>
-      <h2>Solace Lite Voice Companion Demo</h2>
-      
-      {/* Device Selection */}
-      <div style={{ marginBottom: 16 }}>
-        <label htmlFor="device-select"><b>Microphone:</b></label>
-        <select 
-          id="device-select"
-          value={selectedDeviceId} 
-          onChange={(e) => setSelectedDeviceId(e.target.value)}
-          style={{ marginLeft: 8, padding: 4 }}
-          disabled={recording}
-        >
-          {audioDevices.map(device => (
-            <option key={device.deviceId} value={device.deviceId}>
-              {device.label || `Microphone ${device.deviceId.slice(0, 8)}...`}
-            </option>
-          ))}
-        </select>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 25%, #a5d6a7 50%, #81c784 75%, #66bb6a 100%)',
+      fontFamily: '"Fredoka One", "Comic Sans MS", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Nature Background Elements */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: 'none',
+        zIndex: 0
+      }}>
+        {/* Floating leaves */}
+        <div style={{
+          position: 'absolute',
+          top: '10%',
+          left: '5%',
+          fontSize: '48px',
+          color: 'rgba(76, 175, 80, 0.4)',
+          animation: 'float 8s ease-in-out infinite',
+          transform: 'rotate(15deg)',
+          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
+        }}>🍃</div>
+        <div style={{
+          position: 'absolute',
+          top: '20%',
+          right: '10%',
+          fontSize: '40px',
+          color: 'rgba(76, 175, 80, 0.5)',
+          animation: 'float 10s ease-in-out infinite reverse',
+          transform: 'rotate(-20deg)',
+          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
+        }}>🌿</div>
+        <div style={{
+          position: 'absolute',
+          bottom: '15%',
+          left: '15%',
+          fontSize: '36px',
+          color: 'rgba(76, 175, 80, 0.4)',
+          animation: 'float 9s ease-in-out infinite',
+          transform: 'rotate(45deg)',
+          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
+        }}>🍃</div>
+        <div style={{
+          position: 'absolute',
+          bottom: '25%',
+          right: '5%',
+          fontSize: '44px',
+          color: 'rgba(76, 175, 80, 0.5)',
+          animation: 'float 11s ease-in-out infinite reverse',
+          transform: 'rotate(-30deg)',
+          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
+        }}>🌿</div>
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          fontSize: '52px',
+          color: 'rgba(76, 175, 80, 0.3)',
+          animation: 'float 12s ease-in-out infinite',
+          transform: 'translate(-50%, -50%) rotate(60deg)',
+          filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
+        }}>🍃</div>
       </div>
-      
-      <div style={{ marginBottom: 16 }}>
-        <button onClick={handleStart} disabled={recording}>Talk</button>
-        <button onClick={handleStop} disabled={!recording}>Stop</button>
-        <button onClick={handleChat} disabled={!transcript || chatLoading}>Send to Chatbot</button>
-        <button onClick={handleTestMicrophone} disabled={recording}>Test Microphone</button>
-      </div>
-      <div><b>Status:</b> {status}</div>
-      {error && <div style={{ color: 'red' }}><b>Error:</b> {error}</div>}
-      
-      {/* Audio Level Visualization */}
-      {recording && (
-        <div style={{ marginTop: 16 }}>
-          <b>Audio Level:</b>
-          <div style={{ 
-            width: '100%', 
-            height: 20, 
-            backgroundColor: '#f0f0f0', 
-            borderRadius: 4,
-            overflow: 'hidden'
+
+      {/* Main Content */}
+      <div style={{
+        position: 'relative',
+        zIndex: 1,
+        maxWidth: 900,
+        margin: '0 auto',
+        padding: '2rem',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center'
+      }}>
+        {/* Header */}
+        <div style={{
+          textAlign: 'center',
+          marginBottom: '3rem'
+        }}>
+          <div style={{
+            fontSize: '4rem',
+            marginBottom: '0.5rem',
+            color: '#2e7d32',
+            fontWeight: 'bold',
+            textShadow: '0 4px 8px rgba(0,0,0,0.3), 0 0 20px rgba(76,175,80,0.3)',
+            animation: 'glow 3s ease-in-out infinite alternate'
+          }}>
+            🍀 Solace
+          </div>
+          <div style={{
+            fontSize: '1.4rem',
+            color: '#1b5e20',
+            marginBottom: '1rem',
+            fontWeight: '400',
+            textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}>
+            Your AI Companion for Emotional Wellness
+          </div>
+          <div style={{
+            width: '80px',
+            height: '4px',
+            background: 'linear-gradient(90deg, #2e7d32, #4caf50)',
+            margin: '0 auto',
+            borderRadius: '2px',
+            boxShadow: '0 2px 8px rgba(76,175,80,0.3)'
+          }}></div>
+        </div>
+
+        {/* Main Card */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.25)',
+          borderRadius: '25px',
+          padding: '3rem',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+          border: '3px solid rgba(76, 175, 80, 0.4)',
+          backdropFilter: 'blur(20px)'
+        }}>
+          {/* Device Selection */}
+          <div style={{
+            marginBottom: '2rem',
+            padding: '2rem',
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
+            borderRadius: '20px',
+            border: '3px solid rgba(76, 175, 80, 0.5)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
           }}>
             <div style={{
-              width: `${(audioLevel / 255) * 100}%`,
-              height: '100%',
-              backgroundColor: audioLevel > 50 ? '#4CAF50' : '#FFC107',
-              transition: 'width 0.1s ease'
-            }} />
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: '1rem'
+            }}>
+              <span style={{
+                fontSize: '1.5rem',
+                marginRight: '0.8rem',
+                color: '#2e7d32',
+                animation: 'pulse 2s ease-in-out infinite'
+              }}>🎤</span>
+              <label style={{
+                fontWeight: '600',
+                color: '#1b5e20',
+                fontSize: '1.2rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }}>
+                Microphone Selection
+              </label>
+            </div>
+            <select 
+              value={selectedDeviceId} 
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '1rem',
+                borderRadius: '15px',
+                border: '3px solid rgba(76, 175, 80, 0.6)',
+                background: 'rgba(255, 255, 255, 0.2)',
+                fontSize: '1rem',
+                color: '#1b5e20',
+                outline: 'none',
+                transition: 'all 0.3s ease',
+                cursor: 'pointer',
+                backdropFilter: 'blur(10px)',
+                fontWeight: '500'
+              }}
+              disabled={recording}
+            >
+              {audioDevices.map(device => (
+                <option key={device.deviceId} value={device.deviceId} style={{ background: '#e8f5e8' }}>
+                  {device.label || `Microphone ${device.deviceId.slice(0, 8)}...`}
+                </option>
+              ))}
+            </select>
           </div>
-          <small>Level: {audioLevel} / 255</small>
-        </div>
-      )}
-      
-      {/* Speech Detection Indicator */}
-      {recording && (
-        <div style={{ marginTop: 8 }}>
-          <b>Speech Detection:</b>
+
+          {/* Controls */}
           <div style={{
-            display: 'inline-block',
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            backgroundColor: speechDetected ? '#4CAF50' : '#ccc',
-            marginLeft: 8,
-            transition: 'background-color 0.2s ease'
-          }} />
-          <small style={{ marginLeft: 4 }}>
-            {speechDetected ? 'Detecting speech...' : 'Listening...'}
-          </small>
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '1.5rem',
+            marginBottom: '2rem'
+          }}>
+            <button 
+              onClick={handleStart} 
+              disabled={recording}
+              style={{
+                padding: '1.2rem 1.8rem',
+                borderRadius: '20px',
+                border: 'none',
+                background: recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #4caf50 0%, #66bb6a 50%, #81c784 100%)',
+                color: recording ? '#9e9e9e' : '#ffffff',
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                cursor: recording ? 'not-allowed' : 'pointer',
+                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                boxShadow: recording ? 'none' : '0 12px 30px rgba(76, 175, 80, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.8rem',
+                position: 'relative',
+                overflow: 'hidden',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+              }}
+            >
+              <span style={{ 
+                fontSize: '1.4rem',
+                animation: recording ? 'spin 2s linear infinite' : 'bounce 2s ease-in-out infinite'
+              }}>🎙️</span>
+              {recording ? 'Recording...' : 'Start Talking'}
+            </button>
+            
+            <button 
+              onClick={handleStop} 
+              disabled={!recording}
+              style={{
+                padding: '1.2rem 1.8rem',
+                borderRadius: '20px',
+                border: 'none',
+                background: !recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #f44336 0%, #ef5350 50%, #e57373 100%)',
+                color: !recording ? '#9e9e9e' : '#ffffff',
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                cursor: !recording ? 'not-allowed' : 'pointer',
+                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                boxShadow: !recording ? 'none' : '0 12px 30px rgba(244, 67, 54, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.8rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+              }}
+            >
+              <span style={{ 
+                fontSize: '1.4rem',
+                animation: !recording ? 'none' : 'pulse 1s ease-in-out infinite'
+              }}>⏹️</span>
+              Stop Recording
+            </button>
+            
+            <button 
+              onClick={handleChat} 
+              disabled={!transcript || chatLoading}
+              style={{
+                padding: '1.2rem 1.8rem',
+                borderRadius: '20px',
+                border: 'none',
+                background: (!transcript || chatLoading) ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #2196f3 0%, #42a5f5 50%, #64b5f6 100%)',
+                color: (!transcript || chatLoading) ? '#9e9e9e' : '#ffffff',
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                cursor: (!transcript || chatLoading) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                boxShadow: (!transcript || chatLoading) ? 'none' : '0 12px 30px rgba(33, 150, 243, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.8rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+              }}
+            >
+              <span style={{ 
+                fontSize: '1.4rem',
+                animation: chatLoading ? 'spin 1s linear infinite' : 'wiggle 3s ease-in-out infinite'
+              }}>💬</span>
+              {chatLoading ? 'Thinking...' : 'Send to Chatbot'}
+            </button>
+          </div>
+
+          {/* Status and Test Microphone - Same level, same size */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '1.5rem',
+            marginBottom: '2rem'
+          }}>
+            {/* Status Box */}
+            <div style={{
+              padding: '1.2rem 1.8rem',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
+              borderRadius: '20px',
+              border: '3px solid rgba(76, 175, 80, 0.5)',
+              textAlign: 'center',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '220px',
+              height: '60px',
+              boxSizing: 'border-box'
+            }}>
+              <div style={{
+                fontSize: '1rem',
+                color: '#1b5e20',
+                fontWeight: '600',
+                textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }}>
+                Status: {status}
+              </div>
+            </div>
+
+            {/* Test Microphone Button */}
+            <button 
+              onClick={handleTestMicrophone} 
+              disabled={recording}
+              style={{
+                padding: '1.2rem 1.8rem',
+                borderRadius: '20px',
+                border: 'none',
+                background: recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 50%, #ffcc80 100%)',
+                color: recording ? '#9e9e9e' : '#ffffff',
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                cursor: recording ? 'not-allowed' : 'pointer',
+                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                boxShadow: recording ? 'none' : '0 12px 30px rgba(255, 152, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.8rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                width: '220px',
+                height: '60px',
+                boxSizing: 'border-box'
+              }}
+            >
+              <span style={{ 
+                fontSize: '1.4rem',
+                animation: recording ? 'none' : 'shake 2s ease-in-out infinite'
+              }}>🎯</span>
+              Test Microphone
+            </button>
+          </div>
+
+          {/* Audio Visualization */}
+          {recording && (
+            <div style={{
+              marginBottom: '2rem',
+              padding: '2rem',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
+              borderRadius: '20px',
+              border: '3px solid rgba(76, 175, 80, 0.5)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '1.5rem'
+              }}>
+                <span style={{
+                  fontSize: '1.5rem',
+                  marginRight: '0.8rem',
+                  color: '#2e7d32',
+                  animation: 'pulse 1.5s ease-in-out infinite'
+                }}>📊</span>
+                <span style={{
+                  fontWeight: '600',
+                  color: '#1b5e20',
+                  fontSize: '1.2rem',
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  Audio Level
+                </span>
+              </div>
+              
+              <div style={{
+                width: '100%',
+                height: '30px',
+                background: 'rgba(255, 255, 255, 0.3)',
+                borderRadius: '15px',
+                overflow: 'hidden',
+                border: '3px solid rgba(76, 175, 80, 0.6)',
+                position: 'relative'
+              }}>
+                <div style={{
+                  width: `${(audioLevel / 255) * 100}%`,
+                  height: '100%',
+                  background: audioLevel > 50 ? 'linear-gradient(90deg, #4caf50, #66bb6a)' : 'linear-gradient(90deg, #ff9800, #ffb74d)',
+                  transition: 'width 0.1s ease',
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                }} />
+              </div>
+              
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '1rem',
+                fontSize: '0.9rem',
+                color: '#1b5e20',
+                textShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                fontWeight: '500'
+              }}>
+                <span>Level: {audioLevel} / 255</span>
+                <span style={{
+                  animation: speechDetected ? 'pulse 1s ease-in-out infinite' : 'none'
+                }}>
+                  {speechDetected ? '🎤 Detecting speech...' : '👂 Listening...'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Transcript and Response */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+            gap: '2.5rem'
+          }}>
+            {/* Transcript */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%)',
+              borderRadius: '20px',
+              padding: '2rem',
+              border: '3px solid rgba(76, 175, 80, 0.5)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '1.5rem'
+              }}>
+                <span style={{
+                  fontSize: '1.5rem',
+                  marginRight: '0.8rem',
+                  color: '#2e7d32',
+                  animation: 'bounce 2s ease-in-out infinite'
+                }}>📝</span>
+                <span style={{
+                  fontWeight: '600',
+                  color: '#1b5e20',
+                  fontSize: '1.2rem',
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  Your Message
+                </span>
+              </div>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '1.5rem',
+                borderRadius: '15px',
+                minHeight: '120px',
+                border: '3px solid rgba(76, 175, 80, 0.4)',
+                fontSize: '1rem',
+                color: '#1b5e20',
+                lineHeight: '1.6',
+                backdropFilter: 'blur(10px)',
+                fontWeight: '500'
+              }}>
+                {transcript || 'Your transcribed speech will appear here...'}
+              </div>
+            </div>
+
+            {/* Chatbot Response */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(33, 150, 243, 0.3) 0%, rgba(156, 39, 176, 0.3) 100%)',
+              borderRadius: '20px',
+              padding: '2rem',
+              border: '3px solid rgba(76, 175, 80, 0.5)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '1.5rem'
+              }}>
+                <span style={{
+                  fontSize: '1.5rem',
+                  marginRight: '0.8rem',
+                  color: '#2e7d32',
+                  animation: 'wiggle 3s ease-in-out infinite'
+                }}>🤖</span>
+                <span style={{
+                  fontWeight: '600',
+                  color: '#1b5e20',
+                  fontSize: '1.2rem',
+                  textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  Your Solace's Response
+                </span>
+              </div>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '1.5rem',
+                borderRadius: '15px',
+                minHeight: '120px',
+                border: '3px solid rgba(76, 175, 80, 0.4)',
+                fontSize: '1rem',
+                color: '#1b5e20',
+                lineHeight: '1.6',
+                backdropFilter: 'blur(10px)',
+                fontWeight: '500'
+              }}>
+                {chatResponse || 'Your Solace\'s response will appear here...'}
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-      
-      <div style={{ marginTop: 24 }}>
-        <b>Transcript:</b>
-        <div style={{ background: '#f7f7f7', padding: 12, borderRadius: 4, minHeight: 32 }}>{transcript}</div>
       </div>
-      <div style={{ marginTop: 24 }}>
-        <b>Chatbot Response:</b>
-        <div style={{ background: '#e8f5e8', padding: 12, borderRadius: 4, minHeight: 32 }}>{chatResponse}</div>
-      </div>
+
+      {/* CSS Animations */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&display=swap');
+        
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(15deg); }
+          50% { transform: translateY(-30px) rotate(15deg); }
+        }
+        
+        @keyframes glow {
+          0% { text-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 20px rgba(76,175,80,0.3); }
+          100% { text-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 30px rgba(76,175,80,0.6); }
+        }
+        
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
+        
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-10px); }
+          60% { transform: translateY(-5px); }
+        }
+        
+        @keyframes wiggle {
+          0%, 7% { transform: rotateZ(0); }
+          15% { transform: rotateZ(-15deg); }
+          20% { transform: rotateZ(10deg); }
+          25% { transform: rotateZ(-10deg); }
+          30% { transform: rotateZ(6deg); }
+          35% { transform: rotateZ(-4deg); }
+          40%, 100% { transform: rotateZ(0); }
+        }
+        
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        select:hover {
+          border-color: #4caf50 !important;
+          box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4) !important;
+          transform: translateY(-2px);
+        }
+        
+        button:hover:not(:disabled) {
+          transform: translateY(-4px) scale(1.02);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
+        }
+        
+        button:active:not(:disabled) {
+          transform: translateY(-2px) scale(0.98);
+        }
+      `}</style>
     </div>
   );
 };
