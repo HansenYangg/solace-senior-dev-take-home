@@ -1,33 +1,40 @@
 import React, { useState, useRef, useEffect } from 'react';
-// @ts-ignore
-import { recordAndDetectVoice } from './sdk';
+// Remove VAD import
+// import { recordAndDetectVoice } from './sdk';
 
-function pcmToWav(frames: ArrayBuffer[], sampleRate = 16000): Blob {
-  const pcmLength = frames.reduce((sum, buf) => sum + buf.byteLength, 0);
-  const wavBuffer = new ArrayBuffer(44 + pcmLength);
-  const view = new DataView(wavBuffer);
+// Move these utility functions to top-level (outside handleStop)
+function floatTo16BitPCM(float32Array: Float32Array): Int16Array {
+  const pcm = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    let s = Math.max(-1, Math.min(1, float32Array[i]));
+    pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return pcm;
+}
+function encodeWAV(samples: Int16Array, sampleRate: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
   function writeString(offset: number, str: string) {
     for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
   }
   writeString(0, 'RIFF');
-  view.setUint32(4, 36 + pcmLength, true);
+  view.setUint32(4, 36 + samples.length * 2, true);
   writeString(8, 'WAVE');
   writeString(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM format
-  view.setUint16(22, 1, true); // Mono
-  view.setUint32(24, sampleRate, true); // Sample rate
-  view.setUint32(28, sampleRate * 2, true); // Byte rate (sampleRate * channels * bitsPerSample/8)
-  view.setUint16(32, 2, true); // Block align (channels * bitsPerSample/8)
-  view.setUint16(34, 16, true); // Bits per sample
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
   writeString(36, 'data');
-  view.setUint32(40, pcmLength, true);
+  view.setUint32(40, samples.length * 2, true);
   let offset = 44;
-  for (const buf of frames) {
-    new Uint8Array(wavBuffer, offset, buf.byteLength).set(new Uint8Array(buf));
-    offset += buf.byteLength;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    view.setInt16(offset, samples[i], true);
   }
-  return new Blob([wavBuffer], { type: 'audio/wav' });
+  return buffer;
 }
 
 // TTS utility function (uses local proxy server)
@@ -66,12 +73,15 @@ const App: React.FC = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
-  const [speechDetected, setSpeechDetected] = useState(false);
-  const framesRef = useRef<ArrayBuffer[]>([]);
-  const vadIteratorRef = useRef<AsyncIterableIterator<any> | null>(null);
+  // Remove VAD-related state
+  // const [speechDetected, setSpeechDetected] = useState(false);
+  // const framesRef = useRef<ArrayBuffer[]>([]);
+  // const vadIteratorRef = useRef<AsyncIterableIterator<any> | null>(null);
+  const audioBufferRef = useRef<Float32Array[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const [messages, setMessages] = useState<{role: 'user'|'solace', text: string}[]>([]);
   const [pendingTranscript, setPendingTranscript] = useState<string | null>(null);
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
@@ -85,6 +95,7 @@ const App: React.FC = () => {
   sentSound.volume = 0.7;
   const receivedSound = new Audio(process.env.PUBLIC_URL + '/received.mp3');
   receivedSound.volume = 0.7;
+  const recordingRef = useRef(false);
 
   // Load available audio devices
   useEffect(() => {
@@ -110,149 +121,134 @@ const App: React.FC = () => {
     };
   }, [selectedDeviceId]);
 
-  // Start recording
+  // Utility to convert VAD frames to WAV
+  function framesToWav(frames: ArrayBuffer[], sampleRate: number): Blob {
+    // Concatenate all PCM frames
+    let totalLen = 0;
+    for (const buf of frames) totalLen += buf.byteLength;
+    const pcm = new Int16Array(totalLen / 2);
+    let offset = 0;
+    for (const buf of frames) {
+      pcm.set(new Int16Array(buf), offset);
+      offset += buf.byteLength / 2;
+    }
+    const wavBuffer = encodeWAV(pcm, sampleRate);
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }
+
+  // Start recording (capture ALL audio between Start and Stop)
   const handleStart = async () => {
     setTranscript('');
     setStatus('Listening...');
     setError(null);
     setChatResponse('');
-    setPendingTranscript(null); // Clear preview bubble when starting new recording
-    framesRef.current = [];
+    setPendingTranscript(null);
+    audioBufferRef.current = [];
     setRecording(true);
-    
+    recordingRef.current = true;
     try {
-      // Ensure audio context is properly initialized
+      console.log('[AUDIO] Recording started');
       if (audioContextRef.current) {
         audioContextRef.current.close();
         audioContextRef.current = null;
       }
-      if (analyserRef.current) {
-        analyserRef.current = null;
-      }
-      
-      // Set up audio visualization with selected device
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      // Get user media
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
           sampleRate: 16000,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false
-        } 
-      });
-      
-      // Create audio context for visualization
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      source.connect(analyserRef.current);
-      
-      const vad = recordAndDetectVoice({ 
-        sampleRate: 16000, 
-        sensitivity: 2, 
-        frameDuration: 30,
-        deviceId: selectedDeviceId 
-      });
-      
-      let frameCount = 0;
-      let stopRequested = false;
-      let lastSpeechFrame = 0;
-      const minFrames = 5; // Minimum frames to collect
-      const maxFrames = 100; // Maximum frames to prevent infinite recording
-      const speechTimeout = 20; // Continue recording for 20 frames after last speech
-      
-      for await (const { frame } of vad) {
-        framesRef.current.push(frame);
-        frameCount++;
-        lastSpeechFrame = frameCount;
-        setSpeechDetected(true); // Speech is being detected
-        
-        // Add a small delay to ensure frames are collected
-        await new Promise(resolve => setTimeout(resolve, 10));
-        
-        // Update stop requested flag
-        if (!recording && !stopRequested) {
-          stopRequested = true;
+          autoGainControl: true
         }
-        
-        // Stop conditions:
-        // 1. Stop was requested AND we have minimum frames AND enough silence
-        // 2. We've collected maximum frames
-        if ((stopRequested && frameCount >= minFrames && (frameCount - lastSpeechFrame) >= speechTimeout) || 
-            frameCount >= maxFrames) {
-          break;
-        }
-      }
-      
-      setSpeechDetected(false); // No more speech detected
-      
-      // Clean up audio visualization
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      analyserRef.current = null;
-      stream.getTracks().forEach(track => track.stop());
+      });
+      mediaStreamRef.current = stream;
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      sourceNodeRef.current = source;
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      scriptProcessorRef.current = processor;
+      processor.onaudioprocess = (event) => {
+        if (!recordingRef.current) return;
+        const input = event.inputBuffer.getChannelData(0);
+        // Copy input to a new Float32Array and store
+        audioBufferRef.current.push(new Float32Array(input));
+      };
+      source.connect(processor);
+      processor.connect(audioContext.destination);
     } catch (err) {
+      console.error('[AUDIO] Error starting recording:', err);
       setError('Microphone error: ' + (err instanceof Error ? err.message : String(err)));
       setRecording(false);
+      recordingRef.current = false;
       setStatus('Error');
-      
-      // Clean up on error
       if (audioContextRef.current) {
         audioContextRef.current.close();
         audioContextRef.current = null;
       }
-      analyserRef.current = null;
     }
   };
 
   // Stop recording and send to ASR
   const handleStop = async () => {
     setRecording(false);
+    recordingRef.current = false;
     setStatus('Transcribing...');
     try {
-      // Debug: Log the number of PCM frames
-      console.log('Number of PCM frames:', framesRef.current.length);
-      // Debug: Log frame data to check if it's changing
-      if (framesRef.current.length > 0) {
-        const firstFrame = framesRef.current[0];
-        const lastFrame = framesRef.current[framesRef.current.length - 1];
-        console.log('First frame size:', firstFrame.byteLength);
-        console.log('Last frame size:', lastFrame.byteLength);
-        console.log('First frame first 4 bytes:', new Uint8Array(firstFrame.slice(0, 4)));
-        console.log('Last frame first 4 bytes:', new Uint8Array(lastFrame.slice(0, 4)));
+      // Clean up audio nodes
+      if (scriptProcessorRef.current) {
+        scriptProcessorRef.current.disconnect();
+        scriptProcessorRef.current.onaudioprocess = null;
+        scriptProcessorRef.current = null;
       }
-      const wavBlob = pcmToWav(framesRef.current, 16000);
-      // Debug: Log WAV blob details
-      console.log('WAV Blob created:', {
-        size: wavBlob.size,
-        type: wavBlob.type,
-        lastModified: Date.now()
-      });
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+      // Concatenate all Float32Array buffers
+      const allSamples = audioBufferRef.current.length > 0
+        ? new Float32Array(audioBufferRef.current.reduce((acc, cur) => acc + cur.length, 0))
+        : new Float32Array(0);
+      let offset = 0;
+      for (const buf of audioBufferRef.current) {
+        allSamples.set(buf, offset);
+        offset += buf.length;
+      }
+      // Logging: buffer info
+      console.log('[AUDIO] Recording stopped');
+      console.log('[AUDIO] Number of audio buffers:', audioBufferRef.current.length);
+      console.log('[AUDIO] Total samples:', allSamples.length);
+      console.log('[AUDIO] Duration (s):', (allSamples.length / 16000).toFixed(3));
+      if (allSamples.length > 0) {
+        console.log('[AUDIO] First 10 samples:', Array.from(allSamples.slice(0, 10)));
+        console.log('[AUDIO] Last 10 samples:', Array.from(allSamples.slice(-10)));
+      }
+      // Convert to WAV
+      const pcm = floatTo16BitPCM(allSamples);
+      const wavBuffer = encodeWAV(pcm, 16000);
+      const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+      console.log('[AUDIO] WAV blob size:', wavBlob.size, 'type:', wavBlob.type);
+      // Send to Whisper as before
       const formData = new FormData();
       formData.append('file', wavBlob, 'audio.wav');
       formData.append('model', 'whisper-1');
-      // Check for API key before making request
       const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
       if (!apiKey) {
         setError('No OpenAI API key provided. Please set your API key.');
         setStatus('Error');
         return;
       }
-      // Debug: Log the API key
-      console.log('API KEY (ASR):', process.env.REACT_APP_OPENAI_API_KEY);
-      // Debug: Log the WAV Blob size
-      console.log('WAV Blob size:', wavBlob.size);
-      // Debug: Log FormData contents
-      Array.from(formData.entries()).forEach(pair => {
-        console.log('FormData entry:', pair[0], pair[1]);
-      });
-      // Debug: Log request details
-      console.log('Sending ASR request to:', ASR_API_URL);
-      console.log('Request timestamp:', new Date().toISOString());
+      console.log('[ASR] Sending request to:', ASR_API_URL);
       const resp = await fetch(ASR_API_URL, {
         method: 'POST',
         headers: {
@@ -262,16 +258,17 @@ const App: React.FC = () => {
       });
       if (!resp.ok) {
         const data = await resp.json();
-        console.log('ASR error response:', data);
-        throw new Error('ASR failed: ' + resp.statusText);
+        console.error('[ASR] Error response:', data);
+        setError('ASR failed: ' + (data?.error?.message || resp.statusText));
+        setStatus('Error');
+        return;
       }
       const data = await resp.json();
-      // Debug: Log the full response
-      console.log('ASR success response:', data);
-      console.log('Response timestamp:', new Date().toISOString());
+      console.log('[ASR] Success response:', data);
       setTranscript(data.text || '(No transcript)');
       setStatus('Transcript ready');
     } catch (err) {
+      console.error('[ASR] Exception:', err);
       setError('ASR error: ' + (err instanceof Error ? err.message : String(err)));
       setStatus('Error');
     }
