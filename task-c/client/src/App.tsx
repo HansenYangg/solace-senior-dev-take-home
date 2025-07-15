@@ -96,6 +96,7 @@ const App: React.FC = () => {
   const receivedSound = new Audio(process.env.PUBLIC_URL + '/received.mp3');
   receivedSound.volume = 0.7;
   const recordingRef = useRef(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   // Load available audio devices
   useEffect(() => {
@@ -405,6 +406,19 @@ const App: React.FC = () => {
     }
   };
 
+  // Add click outside handler for dropdown
+  useEffect(() => {
+    if (!showAbout) return;
+    function handleClick(e: MouseEvent) {
+      const about = document.getElementById('solace-about-dropdown');
+      if (about && !about.contains(e.target as Node)) {
+        setShowAbout(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showAbout]);
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -413,6 +427,77 @@ const App: React.FC = () => {
       position: 'relative',
       overflow: 'hidden',
     }}>
+      {/* About Dropdown Button (top right) */}
+      <div style={{ position: 'absolute', top: 24, right: 32, zIndex: 20 }}>
+        <button
+          aria-label="Learn more about Solace"
+          onClick={() => setShowAbout(v => !v)}
+          style={{
+            background: 'rgba(255,255,255,0.85)',
+            border: '2.5px solid #2196f3',
+            borderRadius: '50%',
+            width: 44,
+            height: 44,
+            fontSize: '1.7rem',
+            cursor: 'pointer',
+            boxShadow: '0 2px 12px rgba(33,150,243,0.13)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background 0.18s',
+            outline: showAbout ? '2.5px solid #1976d2' : 'none',
+          }}
+        >
+          <span role="img" aria-label="Learn more">❓</span>
+        </button>
+        {showAbout && (
+          <div
+            id="solace-about-dropdown"
+            style={{
+              position: 'absolute',
+              top: 54,
+              right: 0,
+              minWidth: 320,
+              maxWidth: 380,
+              background: 'rgba(255,255,255,0.98)',
+              border: '2.5px solid #2196f3',
+              borderRadius: 16,
+              boxShadow: '0 8px 32px rgba(33,150,243,0.13)',
+              padding: '1.3rem 1.5rem',
+              zIndex: 100,
+              fontSize: '1.08rem',
+              color: '#1b5e20',
+              fontWeight: 500,
+              lineHeight: 1.6,
+              textAlign: 'left',
+              marginTop: 8,
+              animation: 'fadeIn 0.18s',
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: '1.18rem', marginBottom: 8, color: '#1976d2', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span role="img" aria-label="Learn more">❓</span> Learn more about me!
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              I'm available 24/7 to chat, listen, and support you—whether you want to talk, need advice, or just want a friendly presence. Everything you share is private and stays on your device unless you choose to send it.
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <b>How does it work?</b><br/>
+              Click 'Start Talking' to record, say what's on your mind, then review and send. Hit 'Play Response' to hear my reply out loud!
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <b>What can I help with?</b><br/>
+              - Want to vent about something? I'm here.<br/>
+              - Need advice or a listening ear? I'll do my best.<br/>
+              - Just wanna yap? I'm here too.<br/>
+              <br/>
+              <i>I'm not a replacement for professional help, but I'm always here to support you.</i>
+            </div>
+            <div style={{ fontSize: '0.98rem', color: '#388e3c', marginTop: 8 }}>
+              <b>Tip:</b> You can start a conversation any time. I'm always ready to listen!
+            </div>
+          </div>
+        )}
+      </div>
       {/* Floating leaves background */}
       <div style={{
         position: 'absolute',
@@ -423,11 +508,11 @@ const App: React.FC = () => {
         pointerEvents: 'none',
         zIndex: 0
       }}>
-        <div style={{ position: 'absolute', top: '10%', left: '5%', fontSize: '48px', color: 'rgba(76, 175, 80, 0.4)', animation: 'float 8s ease-in-out infinite', transform: 'rotate(15deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
-        <div style={{ position: 'absolute', top: '20%', right: '10%', fontSize: '40px', color: 'rgba(76, 175, 80, 0.5)', animation: 'float 10s ease-in-out infinite reverse', transform: 'rotate(-20deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🌿</div>
-        <div style={{ position: 'absolute', bottom: '15%', left: '15%', fontSize: '36px', color: 'rgba(76, 175, 80, 0.4)', animation: 'float 9s ease-in-out infinite', transform: 'rotate(45deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
-        <div style={{ position: 'absolute', bottom: '25%', right: '5%', fontSize: '44px', color: 'rgba(76, 175, 80, 0.5)', animation: 'float 11s ease-in-out infinite reverse', transform: 'rotate(-30deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🌿</div>
-        <div style={{ position: 'absolute', top: '50%', left: '50%', fontSize: '52px', color: 'rgba(76, 175, 80, 0.3)', animation: 'float 12s ease-in-out infinite', transform: 'translate(-50%, -50%) rotate(60deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
+        <div style={{ position: 'absolute', top: '10%', left: '5%', fontSize: '67px', color: 'rgba(76, 175, 80, 0.4)', animation: 'float 8s ease-in-out infinite', transform: 'rotate(15deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
+        <div style={{ position: 'absolute', top: '20%', right: '10%', fontSize: '56px', color: 'rgba(76, 175, 80, 0.5)', animation: 'float 10s ease-in-out infinite reverse', transform: 'rotate(-20deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🌿</div>
+        <div style={{ position: 'absolute', bottom: '15%', left: '15%', fontSize: '50px', color: 'rgba(76, 175, 80, 0.4)', animation: 'float 9s ease-in-out infinite', transform: 'rotate(45deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
+        <div style={{ position: 'absolute', bottom: '25%', right: '5%', fontSize: '62px', color: 'rgba(76, 175, 80, 0.5)', animation: 'float 11s ease-in-out infinite reverse', transform: 'rotate(-30deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🌿</div>
+        <div style={{ position: 'absolute', top: '50%', left: '50%', fontSize: '73px', color: 'rgba(76, 175, 80, 0.3)', animation: 'float 12s ease-in-out infinite', transform: 'translate(-50%, -50%) rotate(60deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>🍃</div>
       </div>
 
       {/* Mic dropdown at top left */}
@@ -436,11 +521,11 @@ const App: React.FC = () => {
         top: 24,
         left: 24,
         zIndex: 2,
-        minWidth: 340,
-        maxWidth: 420,
+        minWidth: 320, // was 340
+        maxWidth: 400, // was 420
         background: 'rgba(255,255,255,0.22)',
         borderRadius: '16px',
-        padding: '0.8rem 1.2rem 0.8rem 1.2rem',
+        padding: '0.6rem 1rem 0.6rem 1rem', // was 0.8rem 1.2rem 0.8rem 1.2rem
         boxShadow: '0 8px 32px rgba(0,0,0,0.13)',
         border: '2.5px solid rgba(76, 175, 80, 0.22)',
         display: 'flex',
@@ -482,29 +567,28 @@ const App: React.FC = () => {
             </option>
           ))}
         </select>
-        <button 
-          onClick={handleTestMicrophone} 
-          disabled={recording}
-          style={{
-            padding: '0.7rem 1.2rem',
-            borderRadius: '12px',
-            border: 'none',
-            background: recording ? 'rgba(255, 255, 255, 0.2)' : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 50%, #ffcc80 100%)',
-            color: recording ? '#9e9e9e' : '#ffffff',
-            fontSize: '1.05rem',
-            fontWeight: '700',
-            cursor: recording ? 'not-allowed' : 'pointer',
-            marginTop: '0.2rem',
-            marginBottom: '0.2rem',
-            boxShadow: recording ? 'none' : '0 8px 24px rgba(255, 152, 0, 0.18)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            filter: 'brightness(1.08) drop-shadow(0 2px 8px #ffb74d88)',
-          }}
-        >
-          <span style={{ fontSize: '1.15rem' }}>🎯</span> Test
-        </button>
+      </div>
+      {/* Friendly waving message below mic box */}
+      <div style={{
+        position: 'absolute',
+        top: 220, // was 120
+        left: 32,
+        zIndex: 2,
+        maxWidth: 320,
+        background: 'rgba(255,255,255,0.18)',
+        borderRadius: '14px',
+        padding: '1.1rem 1.2rem',
+        boxShadow: '0 4px 16px rgba(76,175,80,0.10)',
+        border: '2px solid rgba(76, 175, 80, 0.13)',
+        color: '#1b5e20',
+        fontWeight: 500,
+        fontSize: '1.08rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.7rem',
+      }}>
+        <span role="img" aria-label="wave" style={{ fontSize: '2.1rem' }}>👋</span>
+        Hi! I'm Solace, your personal AI companion for emotional wellness and mental health. Feel free to send me a message whenever :)
       </div>
 
       {/* Voice Selection Dropdown */}
@@ -547,14 +631,14 @@ const App: React.FC = () => {
         position: 'relative',
         zIndex: 1,
         margin: '0 auto',
-        marginTop: '2.5rem',
+        marginTop: '0.5rem', 
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '88vh',
-        height: '88vh',
-        maxWidth: 700,
+        minHeight: '88vh', // was 87vh, 1 unit lower
+        height: '88vh', // was 87vh, 1 unit lower
+        maxWidth: 900,
         width: '100%',
       }}>
         <div style={{
@@ -562,7 +646,7 @@ const App: React.FC = () => {
           borderRadius: '32px',
           boxShadow: '0 32px 64px rgba(0, 0, 0, 0.18), 0 2px 0 rgba(255, 255, 255, 0.18)',
           border: '3.5px solid #2e7d32',
-          padding: '2.5rem 2.2rem 1.5rem 2.2rem',
+          padding: '2.5rem 2.2rem 1.5rem 2.2rem', 
           width: '100%',
           height: '100%',
           display: 'flex',
@@ -629,7 +713,7 @@ const App: React.FC = () => {
                   padding: '1.1rem 1.3rem',
                   marginBottom: '0.1rem',
                   fontWeight: 500,
-                  fontSize: '1.13rem',
+                  fontSize: '1.01rem', // was 1.13rem
                   boxShadow: msg.role === 'user'
                     ? '0 2px 16px 0 rgba(33,150,243,0.13), 0 2px 0 rgba(255,255,255,0.18)'
                     : '0 2px 16px 0 rgba(180,180,180,0.13), 0 2px 0 rgba(255,255,255,0.18)',
@@ -828,6 +912,29 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* Tip box at bottom left */}
+      <div style={{
+        position: 'absolute',
+        left: 32,
+        bottom: 32,
+        zIndex: 2,
+        maxWidth: 320,
+        background: 'rgba(255,255,255,0.13)',
+        borderRadius: '12px',
+        padding: '0.8rem 1.1rem',
+        boxShadow: '0 2px 8px rgba(76,175,80,0.08)',
+        border: '1.5px solid rgba(76, 175, 80, 0.10)',
+        color: '#256029',
+        fontWeight: 400,
+        fontSize: '0.98rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        opacity: 0.92,
+      }}>
+        <span role="img" aria-label="lightbulb" style={{ fontSize: '1.2rem' }}>💡</span>
+        Tip: Click the "?" on the top right to learn more about how to use your Solace!
+      </div>
       {/* CSS Animations */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&display=swap');
@@ -838,6 +945,10 @@ const App: React.FC = () => {
         @keyframes glow {
           0% { text-shadow: 0 4px 8px rgba(0,0,0,0.13), 0 0 20px rgba(76,175,80,0.13); }
           100% { text-shadow: 0 4px 8px rgba(0,0,0,0.13), 0 0 30px rgba(76,175,80,0.18); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
       `}</style>
     </div>
