@@ -51,6 +51,12 @@ async function synthesizeSpeech(text: string, voiceId: string = 'Nicole'): Promi
 const ASR_API_URL = process.env.REACT_APP_ASR_API_URL || 'https://api.openai.com/v1/audio/transcriptions';
 const CHAT_API_URL = process.env.REACT_APP_CHAT_API_URL || 'https://api.openai.com/v1/chat/completions';
 
+// Add type for conversation exchange
+interface ChatExchange {
+  user: string;
+  ai: string;
+}
+
 const App: React.FC = () => {
   const [recording, setRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -72,6 +78,8 @@ const App: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Add state for selected voice
   const [selectedVoice, setSelectedVoice] = useState<'Aria' | 'Matthew'>('Aria');
+  // Add state for conversation history
+  const [exchanges, setExchanges] = useState<ChatExchange[]>([]);
 
   // Load available audio devices
   useEffect(() => {
@@ -282,8 +290,20 @@ const App: React.FC = () => {
     setStatus('Chatting...');
     setError(null);
     try {
-      // Debug: Log the API key
-      console.log('API KEY (CHAT):', process.env.REACT_APP_OPENAI_API_KEY);
+      // System prompt for warmth/support
+      const systemPrompt =
+        "You are Solace, an emotional companion and supportive friend. You are warm, empathetic, and always there to listen and help. Respond in a caring, conversational, and non-robotic way. Respond directly to the user's latest message, but use the conversation history for context if needed. Avoid repeating the history verbatim.";
+      // Build messages array for OpenAI chat API
+      // Only include the last 5 exchanges
+      const lastExchanges = exchanges.slice(-5);
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...lastExchanges.flatMap(ex => [
+          { role: 'user', content: ex.user },
+          { role: 'assistant', content: ex.ai }
+        ]),
+        { role: 'user', content: userTranscript }
+      ];
       const resp = await fetch(CHAT_API_URL, {
         method: 'POST',
         headers: {
@@ -292,15 +312,18 @@ const App: React.FC = () => {
         },
         body: JSON.stringify({
           model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: 'You are a helpful, empathetic voice companion.' },
-            { role: 'user', content: userTranscript }
-          ]
+          messages
         })
       });
       if (!resp.ok) throw new Error('Chatbot failed: ' + resp.statusText);
       const data = await resp.json();
-      setChatResponse(data.choices?.[0]?.message?.content || '(No response)');
+      const aiReply = data.choices?.[0]?.message?.content || '(No response)';
+      setChatResponse(aiReply);
+      // Add new exchange to history (max 5)
+      setExchanges(prev => {
+        const updated = [...prev, { user: userTranscript, ai: aiReply }];
+        return updated.slice(-5);
+      });
       setStatus('Done');
     } catch (err) {
       setError('Chatbot error: ' + (err instanceof Error ? err.message : String(err)));
