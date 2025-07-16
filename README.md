@@ -105,19 +105,21 @@ User (Decrypted Data)
 ```
 *This flow demonstrates secure enclave-style decryption using AWS Lambda and KMS.*
 
-### 3. Task C: Optional Encrypted Memory Layer
+### 3. Task C: Solace Lite End-to-End Demo
 ```
-Transcript/Chat History
+User Voice Input
   ↓
-Task B SDK (Encrypt)
+Task B SDK (VAD + Voice Capture)
   ↓
-localStorage (Encrypted)
+ASR (OpenAI Whisper)
   ↓
-Task B SDK (Decrypt)
+Chatbot (OpenAI GPT-3.5/4)
   ↓
-User (Decrypted History)
+TTS (AWS Polly)
+  ↓
+Voice Output
 ```
-*This optional feature securely stores the last 3 transcripts in the browser.*
+*This is a complete voice→voice companion demo with optional encrypted memory layer storing the last 3 transcripts in localStorage.*
 
 ## Security Features
 

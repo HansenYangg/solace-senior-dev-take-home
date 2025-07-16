@@ -189,14 +189,14 @@ User (Decrypted Data)
 ```
 User Voice Input
   ↓
-Task B SDK (VAD, optional memory encryption)
+Task B SDK (VAD + Voice Capture)
   ↓
 ASR (OpenAI Whisper)
   ↓
-Chatbot (OpenAI GPT)
+Chatbot (OpenAI GPT-3.5/4)
   ↓
-TTS (Polly)
+TTS (AWS Polly)
   ↓
 Voice Output
 ```
-*In Task C, the SDK is used for VAD and for encrypting the optional memory layer. The main chat flow does not use S3 or Lambda.* 
+*In Task C, the SDK is used for VAD and for encrypting the optional memory layer storing the last 3 transcripts in localStorage. The main chat flow does not use S3 or Lambda.* 
