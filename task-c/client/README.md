@@ -162,9 +162,37 @@ npm test
 - **ASR/Chatbot errors?** Check your API keys and endpoints.
 - **Mic issues?** Ensure your browser has permission to access the microphone.
 
----
+## Architecture Flow
 
-## License
+### Main Chat Demo Flow
+```
+User Voice Input
+  ↓
+Task B SDK (VAD, optional memory encryption)
+  ↓
+ASR (OpenAI Whisper)
+  ↓
+Chatbot (OpenAI GPT)
+  ↓
+TTS (Polly)
+  ↓
+Voice Output
+```
+*This is the main flow for the voice-to-voice companion demo. S3 and Lambda are not used in this flow.*
 
-MIT (or your chosen license)
+### Optional Encrypted Memory Layer
+```
+Transcript/Chat History
+  ↓
+Task B SDK (Encrypt)
+  ↓
+localStorage (Encrypted)
+  ↓
+Task B SDK (Decrypt)
+  ↓
+User (Decrypted History)
+```
+*This optional feature securely stores the last 3 transcripts in the browser.*
+
+## Last note - this might be a bit confusing so feel free to email me at hansenyang@berkeley.edu for clarification
 

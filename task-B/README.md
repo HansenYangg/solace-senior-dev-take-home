@@ -166,3 +166,37 @@ npm run test
 - [x] S3 upload/download helpers with tests
 - [x] API documentation for all public functions
 - [x] Node.js/browser support notes 
+
+## Architecture Flow
+
+This SDK is used in two main flows:
+
+### 1. Secure Blob Flow (Task A/B)
+```
+User Data
+  ↓
+Task B SDK (Encrypt)
+  ↓
+S3 (Encrypted Blob)
+  ↓
+Task A Lambda (Decrypt)
+  ↓
+User (Decrypted Data)
+```
+*This demonstrates secure enclave-style decryption using AWS Lambda and KMS.*
+
+### 2. Task C: VAD & Optional Memory Layer
+```
+User Voice Input
+  ↓
+Task B SDK (VAD, optional memory encryption)
+  ↓
+ASR (OpenAI Whisper)
+  ↓
+Chatbot (OpenAI GPT)
+  ↓
+TTS (Polly)
+  ↓
+Voice Output
+```
+*In Task C, the SDK is used for VAD and for encrypting the optional memory layer. The main chat flow does not use S3 or Lambda.* 

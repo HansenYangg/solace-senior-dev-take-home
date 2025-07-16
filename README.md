@@ -75,9 +75,49 @@ To enable Text-to-Speech (TTS) in the Task C frontend, you must run a local AWS 
 
 ## Architecture Overview
 
+### 1. Task C: End-to-End Chat Demo
 ```
-User Voice Input → Task B SDK (Encrypt) → S3 → Task A Lambda (Decrypt) → Task C (ASR → Chatbot → TTS) → Voice Output
+User Voice Input
+  ↓
+Task B SDK (VAD, optional memory encryption)
+  ↓
+ASR (OpenAI Whisper)
+  ↓
+Chatbot (OpenAI GPT)
+  ↓
+TTS (Polly)
+  ↓
+Voice Output
 ```
+*This is the main flow for the voice-to-voice companion demo.*
+
+### 2. Task A/B: Secure Blob Flow
+```
+User Data
+  ↓
+Task B SDK (Encrypt)
+  ↓
+S3 (Encrypted Blob)
+  ↓
+Task A Lambda (Decrypt)
+  ↓
+User (Decrypted Data)
+```
+*This flow demonstrates secure enclave-style decryption using AWS Lambda and KMS.*
+
+### 3. Task C: Optional Encrypted Memory Layer
+```
+Transcript/Chat History
+  ↓
+Task B SDK (Encrypt)
+  ↓
+localStorage (Encrypted)
+  ↓
+Task B SDK (Decrypt)
+  ↓
+User (Decrypted History)
+```
+*This optional feature securely stores the last 3 transcripts in the browser.*
 
 ## Security Features
 

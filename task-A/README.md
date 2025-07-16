@@ -88,12 +88,31 @@ A sample script (`decrypt_test.sh`) is provided to:
 
 ---
 
-## Example curl Invocation
+## Example curl Invocation (please note this might vary depending on your OS)
 ```sh
 curl -X POST "<API_URL>/decrypt/" \
   -H "Content-Type: application/json" \
   -d '{"blobKey": "test-encrypted-blob.bin"}'
 ```
+
+---
+
+## Architecture Flow
+
+This service is part of the secure blob decryption flow:
+
+```
+User Data
+  ↓
+Task B SDK (Encrypt)
+  ↓
+S3 (Encrypted Blob)
+  ↓
+Task A Lambda (Decrypt)
+  ↓
+User (Decrypted Data)
+```
+*This flow demonstrates secure enclave-style decryption using AWS Lambda and KMS. It is separate from the main Task C chat demo.*
 
 ---
 
