@@ -352,7 +352,7 @@ const App: React.FC = () => {
     try {
       // System prompt for warmth/support
       const systemPrompt =
-        "You are Solace, an emotional companion and supportive friend. You are warm, empathetic, and always there to listen and help. Respond in a caring, conversational, and non-robotic way. Respond directly to the user's latest message, but use the conversation history for context if needed. Avoid repeating the history verbatim.";
+        "You are Solace, an emotional companion and supportive friend. You are warm, empathetic, and always there to listen and help. Respond in a caring, conversational, and non-robotic way. Respond directly to the user's latest message, but use the conversation history for context if needed. Avoid repeating the history verbatim. Be concise and realistic in your response, as if you were human, ensuring the conversation flows smoothly and matching their style and tone.";
       // Build messages array for OpenAI chat API
       // Only include the last 5 exchanges
       const lastExchanges = exchanges.slice(-5);
@@ -913,7 +913,7 @@ const App: React.FC = () => {
                     : '0 2px 16px 0 rgba(180,180,180,0.13), 0 2px 0 rgba(255,255,255,0.18)',
                   position: 'relative',
                   backdropFilter: 'blur(10px)',
-                  textAlign: msg.role === 'user' ? 'right' : 'left',
+                  textAlign: 'left',
                 }}
               >
                 {msg.text}
