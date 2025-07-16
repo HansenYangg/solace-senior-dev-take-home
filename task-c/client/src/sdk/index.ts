@@ -107,7 +107,7 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
   const frameQueue: { frame: ArrayBuffer; timestamp: number }[] = [];
   let isDone = false;
   let audioProcessed = false;
-  let resolveNext: ((value: { frame: ArrayBuffer; timestamp: number }) => void) | null = null;
+  let resolveNext: any = null;
   
   // Initialize Silero VAD with callback
   let lastIsSpeech = false;
@@ -188,7 +188,7 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
       console.log('VAD Generator: Waiting for next frame...');
       
       // Wait for the next frame
-      const frame = await new Promise<{ frame: ArrayBuffer; timestamp: number }>((resolve) => {
+      const frame = await new Promise<{ frame: ArrayBuffer; timestamp: number } | undefined>((resolve) => {
         // If we have frames in queue, return immediately
         if (frameQueue.length > 0) {
           console.log('VAD Generator: returning frame from queue');
@@ -201,6 +201,7 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
         console.log('VAD Generator: waiting for next frame');
         resolveNext = resolve;
       });
+      if (frame === undefined) break;
       
       console.log('VAD Generator: Yielding frame');
       yield frame;
@@ -209,6 +210,10 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
     // Cleanup
     console.log('VAD: Cleaning up');
     isDone = true;
+    if (resolveNext !== null) {
+      (resolveNext as Function)(undefined);
+      resolveNext = null;
+    }
     stream.getTracks().forEach(track => track.stop());
     source.disconnect();
     processor.disconnect();

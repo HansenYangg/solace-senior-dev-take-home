@@ -16,7 +16,7 @@
 
 console.log("App.js loaded");
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 // Import SDK functions from local copy
 import { recordAndDetectVoice, VADConfig } from './sdk';
 
@@ -35,15 +35,35 @@ function App() {
   const [plaintext, setPlaintext] = useState<string>("");
   const [status, setStatus] = useState<string>("Ready to record");
   const [isProcessingFrames, setIsProcessingFrames] = useState(false);
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState<string | undefined>(undefined);
   
   // Refs for managing recording state
   const recordingRef = useRef(false);
   const voiceFramesRef = useRef<ArrayBuffer[]>([]);
+  const voiceIteratorRef = useRef<AsyncGenerator<{ frame: ArrayBuffer; timestamp: number }> | null>(null);
+  const processVoiceFramesPromiseRef = useRef<Promise<void> | null>(null);
+  const stoppedRef = useRef(false);
   const [vadConfig, setVadConfig] = useState<VADConfig>({
-    sensitivity: 2,
+    sensitivity: 1, // Match Task C for best results
     frameDuration: 30,
     sampleRate: 16000
   });
+
+  // Fetch available microphones on mount
+  useEffect(() => {
+    async function fetchMics() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        setMicDevices(mics);
+        if (mics.length > 0) setSelectedMicId(mics[0].deviceId);
+      } catch (e) {
+        setMicDevices([]);
+      }
+    }
+    fetchMics();
+  }, []);
 
   // Real VAD-based recording
   const handleStartRecording = async () => {
@@ -52,13 +72,15 @@ function App() {
       setVoiceFrames([]);
       voiceFramesRef.current = [];
       recordingRef.current = true;
+      stoppedRef.current = false;
       
-      console.log('Starting recording with VAD config:', vadConfig);
+      console.log('Starting recording with VAD config:', vadConfig, 'mic:', selectedMicId);
       
       console.log('About to call recordAndDetectVoice...');
       let voiceIterator: AsyncIterable<{ frame: ArrayBuffer; timestamp: number }>;
       try {
-        voiceIterator = recordAndDetectVoice(vadConfig);
+        voiceIterator = recordAndDetectVoice({ ...vadConfig, deviceId: selectedMicId });
+        voiceIteratorRef.current = voiceIterator as AsyncGenerator<{ frame: ArrayBuffer; timestamp: number }>;
         console.log('recordAndDetectVoice returned:', voiceIterator);
         console.log('voiceIterator type:', typeof voiceIterator);
         console.log('voiceIterator has Symbol.asyncIterator:', voiceIterator && typeof voiceIterator[Symbol.asyncIterator] === 'function');
@@ -79,8 +101,7 @@ function App() {
         try {
           console.log('processVoiceFrames: Starting for-await loop...');
           for await (const voiceFrame of voiceIterator) {
-            console.log('processVoiceFrames: Got voice frame in loop');
-            
+            if (stoppedRef.current) break;
             if (!recordingRef.current) {
               console.log('processVoiceFrames: recording stopped, breaking');
               break;
@@ -104,7 +125,7 @@ function App() {
           setIsProcessingFrames(false);
         }
       };
-      processVoiceFrames();
+      processVoiceFramesPromiseRef.current = processVoiceFrames();
     } catch (error) {
       console.error('Error starting recording:', error);
       setStatus('Error starting recording: ' + (error instanceof Error ? error.message : String(error)));
@@ -116,7 +137,35 @@ function App() {
     setStatus("Stopping recording and processing...");
     recordingRef.current = false;
     setRecording(false);
-    
+    stoppedRef.current = true;
+    // Properly stop VAD generator and trigger cleanup
+    if (voiceIteratorRef.current && voiceIteratorRef.current.return) {
+      console.log('[DEBUG] Calling voiceIteratorRef.current.return()');
+      try {
+        await Promise.race([
+          voiceIteratorRef.current.return(undefined),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Generator cleanup timeout")), 2000))
+        ]);
+        console.log('[DEBUG] voiceIteratorRef.current.return() completed');
+      } catch (e) {
+        console.warn("Generator cleanup failed or timed out", e);
+      }
+      voiceIteratorRef.current = null;
+    }
+    // Wait for processVoiceFrames to finish
+    if (processVoiceFramesPromiseRef.current) {
+      console.log('[DEBUG] Waiting for processVoiceFramesPromiseRef.current');
+      try {
+        await Promise.race([
+          processVoiceFramesPromiseRef.current,
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Frame processing timeout")), 2000))
+        ]);
+        console.log('[DEBUG] processVoiceFramesPromiseRef.current completed');
+      } catch (e) {
+        console.warn("Frame processing failed or timed out", e);
+      }
+      processVoiceFramesPromiseRef.current = null;
+    }
     // Wait for at least one frame or a timeout
     let waitCount = 0;
     while (voiceFramesRef.current.length === 0 && waitCount < 20) { // wait up to 2 seconds
@@ -181,6 +230,9 @@ function App() {
       const message = err instanceof Error ? err.message : String(err);
       setStatus("Upload failed: " + message);
     }
+    // Reset refs after stopping
+    voiceFramesRef.current = [];
+    stoppedRef.current = false;
   };
 
   const handleFetchAndDecrypt = async () => {
@@ -239,6 +291,14 @@ function App() {
       {/* VAD Configuration */}
       <div style={{ marginBottom: 16, padding: 12, background: "#f0f0f0", borderRadius: 4 }}>
         <h4>VAD Configuration</h4>
+        <div style={{ marginBottom: 8 }}>
+          <label>Microphone: </label>
+          <select value={selectedMicId} onChange={e => setSelectedMicId(e.target.value)} disabled={recording}>
+            {micDevices.map(mic => (
+              <option key={mic.deviceId} value={mic.deviceId}>{mic.label || `Microphone (${mic.deviceId})`}</option>
+            ))}
+          </select>
+        </div>
         <div style={{ marginBottom: 8 }}>
           <label>Sensitivity: </label>
           <select 

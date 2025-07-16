@@ -23,16 +23,18 @@ export interface VADConfig {
   sensitivity?: number; // 0-3, where 0 is least sensitive, 3 is most sensitive
   frameDuration?: number; // 10, 20, or 30 ms
   sampleRate?: number; // 8000, 16000, 32000, or 48000 Hz
+  deviceId?: string; // Optional: specific microphone deviceId
 }
 
 // Default VAD configuration
 const DEFAULT_VAD_CONFIG: Required<VADConfig> = {
-  sensitivity: 2,
+  sensitivity: 2, // Match Task C for best results
   frameDuration: 30,
-  sampleRate: 16000
+  sampleRate: 16000,
+  deviceId: ''
 };
 
-import { AudioNodeVAD } from '@ricky0123/vad-web';
+import { MicVAD } from '@ricky0123/vad-web';
 
 /**
  * Records audio from microphone and yields only frames containing voice activity.
@@ -43,10 +45,8 @@ import { AudioNodeVAD } from '@ricky0123/vad-web';
  */
 export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterable<{ frame: ArrayBuffer; timestamp: number }> {
   console.log('=== VAD: Function called ===');
-  
+  console.log('USING RICKY SILERO VAD (MicVAD, @ricky0123/vad-web)');
   const vadConfig = { ...DEFAULT_VAD_CONFIG, ...config };
-  
-  // Validate configuration
   if (vadConfig.sensitivity < 0 || vadConfig.sensitivity > 3) {
     throw new Error('VAD sensitivity must be between 0 and 3');
   }
@@ -56,163 +56,53 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
   if (![8000, 16000, 32000, 48000].includes(vadConfig.sampleRate)) {
     throw new Error('VAD sample rate must be 8000, 16000, 32000, or 48000 Hz');
   }
-
   console.log('VAD: Starting voice detection with config:', vadConfig);
-
-  // Request microphone access
-  console.log('VAD: Requesting microphone access...');
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ 
-      audio: {
-        sampleRate: vadConfig.sampleRate,
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true
-      } 
-    });
-    console.log('VAD: Got microphone stream successfully');
-  } catch (error) {
-    console.error('VAD: Failed to get microphone stream:', error);
-    throw error;
-  }
-
-  // Create audio context
-  console.log('VAD: Creating audio context...');
-  const audioContext = new AudioContext({ sampleRate: vadConfig.sampleRate });
-  console.log('VAD: Audio context created, state:', audioContext.state);
-  
-  const source = audioContext.createMediaStreamSource(stream);
-  console.log('VAD: Media stream source created');
-  
-  // Calculate frame size in samples
-  const frameSize = (vadConfig.sampleRate * vadConfig.frameDuration) / 1000;
-  console.log('VAD: Frame size in samples:', frameSize);
-  
-  // Create buffer for processing
-  const buffer = new Float32Array(frameSize);
-  let bufferIndex = 0;
-  
-  // Create script processor for real-time processing
-  // Use a power-of-two buffer size that's compatible with ScriptProcessorNode
-  const processorBufferSize = Math.pow(2, Math.ceil(Math.log2(frameSize)));
-  console.log('VAD: Creating script processor with buffer size:', processorBufferSize);
-  const processor = audioContext.createScriptProcessor(processorBufferSize, 1, 1);
-  console.log('VAD: Script processor created');
-  
-  let frameCount = 0;
-  const startTime = Date.now();
-  
-  // Set up frame queue and control
   const frameQueue: { frame: ArrayBuffer; timestamp: number }[] = [];
   let isDone = false;
-  let audioProcessed = false;
-  let resolveNext: ((value: { frame: ArrayBuffer; timestamp: number }) => void) | null = null;
-  
-  // Initialize Silero VAD with callback
-  let lastIsSpeech = false;
-  const thresholds = [0.5, 0.7, 0.85, 0.95];
-  const vad = await AudioNodeVAD.new(audioContext, {
-    onFrameProcessed: (probs) => {
-      lastIsSpeech = probs.isSpeech >= thresholds[vadConfig.sensitivity];
-    },
-  });
-
-  // Set up audio processing
-  console.log('VAD: Setting up audio processing...');
-  processor.onaudioprocess = async (event) => {
-    if (isDone) return;
-    
-    if (!audioProcessed) {
-      console.log('VAD: First audio process event received!');
-      audioProcessed = true;
-    }
-    
-    const input = event.inputBuffer.getChannelData(0);
-    
-    // Process all input samples
-    for (let i = 0; i < input.length; i++) {
-      buffer[bufferIndex] = input[i];
-      bufferIndex++;
-      
-      if (bufferIndex >= frameSize) {
-        // Process frame with vad-web
-        await vad.processFrame(buffer);
-        if (lastIsSpeech) {
-          const pcmFrame = convertToPCM(buffer);
-          const timestamp = startTime + (frameCount * vadConfig.frameDuration);
-          console.log(`VAD: Voice detected (burst)! Frame ${frameCount}, timestamp ${timestamp}`);
-          const frameData = {
-            frame: pcmFrame,
-            timestamp
-          };
-          if (resolveNext) {
-            console.log('VAD: Resolving immediately with frame');
-            resolveNext(frameData);
-            resolveNext = null;
-          } else {
-            console.log('VAD: Adding frame to queue');
-            frameQueue.push(frameData);
-          }
-        } else {
-          if (Math.random() < 0.1) {
-            console.log(`VAD: No voice in frame ${frameCount} (threshold: ${thresholds[vadConfig.sensitivity]})`);
-          }
-        }
-        
-        bufferIndex = 0;
-        frameCount++;
+  let resolveNext: any = null;
+  let frameCount = 0;
+  const startTime = Date.now();
+  const vad = await MicVAD.new({
+    stream: undefined,
+    onSpeechStart: () => console.log('[VAD DEBUG] onSpeechStart'),
+    onSpeechEnd: (audio: Float32Array) => {
+      console.log('[VAD DEBUG] onSpeechEnd, audio length:', audio.length);
+      const rms = Math.sqrt(audio.reduce((sum, v) => sum + v * v, 0) / audio.length);
+      const min = Math.min.apply(null, audio as unknown as number[]);
+      const max = Math.max.apply(null, audio as unknown as number[]);
+      console.log(`[VAD DEBUG] [MicVAD] Speech Segment RMS: ${rms} min: ${min} max: ${max}`);
+      const pcmFrame = convertToPCM(audio);
+      const timestamp = startTime + (frameCount * vadConfig.frameDuration);
+      frameQueue.push({ frame: pcmFrame, timestamp });
+      frameCount++;
+      if (resolveNext) {
+        resolveNext(frameQueue.shift());
+        resolveNext = null;
       }
     }
-  };
-  
-  // Connect audio nodes
-  console.log('VAD: Connecting audio nodes...');
-  source.connect(processor);
-  processor.connect(audioContext.destination);
-  console.log('VAD: Audio nodes connected');
-  
-  // Resume audio context if it's suspended
-  console.log('VAD: Checking audio context state...');
-  if (audioContext.state === 'suspended') {
-    console.log('VAD: Resuming suspended audio context...');
-    await audioContext.resume();
-  }
-  
-  console.log('VAD: Audio context state:', audioContext.state);
-  
-  // Create a proper async generator
-  console.log('VAD: Starting async generator loop...');
+  });
+  await vad.start();
+  console.log('MicVAD started');
   try {
     while (!isDone) {
-      console.log('VAD Generator: Waiting for next frame...');
-      
-      // Wait for the next frame
-      const frame = await new Promise<{ frame: ArrayBuffer; timestamp: number }>((resolve) => {
-        // If we have frames in queue, return immediately
+      const frame = await new Promise<{ frame: ArrayBuffer; timestamp: number } | undefined>((resolve) => {
         if (frameQueue.length > 0) {
-          console.log('VAD Generator: returning frame from queue');
-          const frame = frameQueue.shift()!;
-          resolve(frame);
+          resolve(frameQueue.shift());
           return;
         }
-        
-        // Otherwise, wait for the next frame
-        console.log('VAD Generator: waiting for next frame');
         resolveNext = resolve;
       });
-      
-      console.log('VAD Generator: Yielding frame');
+      if (frame === undefined) break;
       yield frame;
     }
   } finally {
-    // Cleanup
-    console.log('VAD: Cleaning up');
     isDone = true;
-    stream.getTracks().forEach(track => track.stop());
-    source.disconnect();
-    processor.disconnect();
-    audioContext.close();
+    if (resolveNext !== null) {
+      (resolveNext as Function)(undefined);
+      resolveNext = null;
+    }
+    await vad.pause();
+    await vad.destroy();
   }
 }
 
