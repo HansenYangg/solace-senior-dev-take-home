@@ -5,8 +5,8 @@ A secure voice processing system with enclave-style decryption, cross-platform c
 ## Project Structure
 
 - **task-A/**: Enclave-Style Decryption Service (AWS Lambda + KMS)
-- **task-B/**: Cross-Platform Client SDK (@solace/client-sdk)
-- **task-C/**: Solace Lite End-to-End Demo (Voice → Voice Companion)
+- **task-B/**: Cross-Platform Client SDK (@solace/client-sdk, powered by Silero VAD)
+- **task-C/**: Solace Lite End-to-End Demo (Voice → Voice Companion, using Silero VAD)
 
 ## Prerequisites
 

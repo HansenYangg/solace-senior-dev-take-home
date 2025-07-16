@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
+import { recordAndDetectVoice, encryptBlob, decryptBlob } from './sdk';
 // Remove VAD import
 // import { recordAndDetectVoice } from './sdk';
 

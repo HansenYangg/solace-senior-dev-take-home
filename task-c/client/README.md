@@ -4,7 +4,7 @@
 
 ## 🚨 Critical: Setting Up the SDK for Voice Features (Step-by-Step)
 
-> **IMPORTANT:** The voice recording and encryption features in this app **will NOT work** unless you set up the SDK correctly. Due to Create React App (CRA) limitations, you must manually copy the SDK file from Task B and import it locally. Follow these steps:
+> **IMPORTANT:** The voice recording and encryption features in this app rely on the SDK found in `src/sdk/`. This SDK is now maintained directly in this directory and is not copied from Task B. All VAD is powered by Ricky's Silero VAD (`@ricky0123/vad-web`).
 
 ### 1. Build the SDK in Task B
 
@@ -50,7 +50,7 @@ import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
 
 ## Features
 
-- **Voice Capture & VAD:** Record your voice with real-time voice activity detection (VAD) using the @solace/client-sdk (imported via a local file copy in `src/sdk/`, not as an npm package).
+- **Voice Capture & VAD:** Record your voice with real-time voice activity detection (VAD) using the SDK in `src/sdk/` (powered by Silero VAD, imported locally).
 - **ASR (Speech-to-Text):** Transcribe speech to text using OpenAI Whisper or another ASR API.
 - **Chatbot:** Send transcripts to OpenAI GPT-3.5/4 and receive intelligent responses.
 - **TTS (Text-to-Speech):** Play responses using AWS Polly (via a local proxy) with selectable voices.

@@ -1,7 +1,7 @@
 # Task B: Cross-Platform Client SDK (@solace/client-sdk)
 
 ## Overview
-A secure client SDK for blob encryption (AES-GCM 256), voice activity detection (VAD), and integration with the Task A enclave-style decryption service.
+A secure client SDK for blob encryption (AES-GCM 256), voice activity detection (VAD) powered by Ricky's Silero VAD (`@ricky0123/vad-web`), and integration with the Task A enclave-style decryption service.
 
 ---
 
@@ -104,7 +104,7 @@ const isVoice = detectVoiceActivity(float32PcmBuffer, sensitivity); // boolean
 ---
 
 ## VAD Implementation Note
-> **Note:** The VAD implementation in this SDK is energy-based (RMS threshold), not the official webrtcvad.js algorithm. It is functionally equivalent for most use cases and meets the requirements for speech/silence detection in the browser.
+> **Note:** The VAD implementation in this SDK is now powered by Ricky's Silero VAD (`@ricky0123/vad-web`), a neural network-based model for accurate speech/silence detection in the browser. The previous energy-based (RMS) approach has been fully replaced.
 
 ---
 
