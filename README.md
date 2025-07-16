@@ -59,6 +59,10 @@ To enable Text-to-Speech (TTS) in the Task C frontend, you must run a local AWS 
 
 4. The Task C React app will use this proxy for TTS. **The proxy must be running for TTS to work.**
 
+## SDK Import Note (Task C)
+
+> **Note:** In Task C, due to Create React App limitations, the SDK is imported via a local file copy in `src/sdk/index.js` (copied from `task-B/dist/index.js`), not as an npm package. See Task C's README for details.
+
 ## Submission Checklist
 
 - [ ] Task A: Lambda decryption service deployed and tested

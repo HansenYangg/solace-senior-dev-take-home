@@ -1,12 +1,56 @@
 # Task C: Solace Lite End-to-End Demo
 
-A minimal, privacy-preserving voice companion demo. Capture voice, transcribe to text, chat with an AI, and play back responses with customizable voices—all in your browser.
+---
+
+## 🚨 Critical: Setting Up the SDK for Voice Features (Step-by-Step)
+
+> **IMPORTANT:** The voice recording and encryption features in this app **will NOT work** unless you set up the SDK correctly. Due to Create React App (CRA) limitations, you must manually copy the SDK file from Task B and import it locally. Follow these steps:
+
+### 1. Build the SDK in Task B
+
+Open a terminal in the project root and run:
+```sh
+cd ../../task-B
+npm install
+npm run build
+```
+This will generate the SDK file at `task-B/dist/index.js`.
+
+### 2. Copy the SDK File to Task C
+
+Copy the built SDK file into your client app:
+```sh
+cp ../../task-B/dist/index.js ./src/sdk/index.js
+```
+If the `src/sdk/` directory does not exist, create it first:
+```sh
+mkdir -p ./src/sdk
+cp ../../task-B/dist/index.js ./src/sdk/index.js
+```
+
+### 3. Import the SDK in Your Code
+
+In your React components, import SDK functions like this:
+```js
+import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
+```
+**Do NOT** import from `@solace/client-sdk` or use npm/yarn link.
+
+### 4. Verify the SDK Import
+- Start the app (`npm start`).
+- Try to use the voice recording feature.
+- If you see errors like "Cannot find module './sdk/index'" or voice features are disabled, check that you copied the file correctly.
+
+### 5. Troubleshooting
+- If you rebuild the SDK in Task B, **recopy** the file to Task C.
+- If you see import errors, check the file path and that `index.js` exists in `src/sdk/`.
+- If voice features do not work, double-check all steps above.
 
 ---
 
 ## Features
 
-- **Voice Capture & VAD:** Record your voice with real-time voice activity detection (VAD) using the @solace/client-sdk.
+- **Voice Capture & VAD:** Record your voice with real-time voice activity detection (VAD) using the @solace/client-sdk (imported via a local file copy in `src/sdk/`, not as an npm package).
 - **ASR (Speech-to-Text):** Transcribe speech to text using OpenAI Whisper or another ASR API.
 - **Chatbot:** Send transcripts to OpenAI GPT-3.5/4 and receive intelligent responses.
 - **TTS (Text-to-Speech):** Play responses using AWS Polly (via a local proxy) with selectable voices.
@@ -25,7 +69,14 @@ cd task-c/client
 npm install
 ```
 
-### 2. Environment Variables
+### 2. SDK Import (Important!)
+
+> **Note:** Due to Create React App limitations, the SDK is imported via a local file copy in `src/sdk/index.js` (copied from `task-B/dist/index.js`), not as an npm package. You must copy the built SDK into `src/sdk/` and import as:
+> ```js
+> import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
+> ```
+
+### 3. Environment Variables
 
 Create a `.env` file in this directory (see `.env.example` for required variables):
 
@@ -38,7 +89,7 @@ REACT_APP_CHAT_API_URL=https://api.openai.com/v1/chat/completions
 
 **Note:** Do NOT commit secrets to version control.
 
-### 3. (Optional) Set Up Local Polly Proxy for TTS
+### 4. (Optional) Set Up Local Polly Proxy for TTS
 
 To enable Text-to-Speech, run the local AWS Polly proxy:
 
@@ -74,7 +125,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Local Memory Layer (Optional)
 
-The app can securely store your last 3 transcripts in the browser’s localStorage, encrypted using the @solace/client-sdk. This means your recent conversation history is private—even if someone accesses your device, they cannot read your transcripts without the decryption key.
+The app can securely store your last 3 transcripts in the browser’s localStorage, encrypted using the @solace/client-sdk (imported via a local file copy in `src/sdk/`). This means your recent conversation history is private—even if someone accesses your device, they cannot read your transcripts without the decryption key.
 
 ---
 

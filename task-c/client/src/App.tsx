@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
 // Remove VAD import
 // import { recordAndDetectVoice } from './sdk';
 
@@ -64,6 +65,30 @@ interface ChatExchange {
   ai: string;
 }
 
+// Add this helper at the top (after imports)
+async function getKeyFromPassphrase(passphrase: string) {
+  const enc = new TextEncoder();
+  const keyMaterial = await window.crypto.subtle.importKey(
+    "raw",
+    enc.encode(passphrase),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+  return window.crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: enc.encode("solace-convo-history"),
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
 const App: React.FC = () => {
   const [recording, setRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -73,15 +98,9 @@ const App: React.FC = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
-  // Remove VAD-related state
-  // const [speechDetected, setSpeechDetected] = useState(false);
-  // const framesRef = useRef<ArrayBuffer[]>([]);
-  // const vadIteratorRef = useRef<AsyncIterableIterator<any> | null>(null);
-  const audioBufferRef = useRef<Float32Array[]>([]);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  // VAD-related state
+  const vadFramesRef = useRef<ArrayBuffer[]>([]);
+  const vadIteratorRef = useRef<AsyncIterable<{ frame: ArrayBuffer; timestamp: number }> | null>(null);
   const [messages, setMessages] = useState<{role: 'user'|'solace', text: string}[]>([]);
   const [pendingTranscript, setPendingTranscript] = useState<string | null>(null);
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
@@ -97,6 +116,70 @@ const App: React.FC = () => {
   receivedSound.volume = 0.7;
   const recordingRef = useRef(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<{timestamp: number, user: string, ai: string}[]>([]);
+
+  // Encrypt and store conversation history
+  const saveConversationToHistory = async (userMessage: string, aiResponse: string) => {
+    try {
+      const conversation = {
+        timestamp: Date.now(),
+        user: userMessage,
+        ai: aiResponse
+      };
+      
+      // Get existing history
+      const existingHistory = conversationHistory;
+      const updatedHistory = [...existingHistory, conversation].slice(-3); // Keep last 3
+      
+      // Encrypt the history
+      const historyString = JSON.stringify(updatedHistory);
+      console.log('🔐 Encrypting conversation history:', historyString);
+      const passphrase = "solace-demo-passphrase"; // For demo only
+      const key = await getKeyFromPassphrase(passphrase);
+      const encrypted = await encryptBlob(historyString, key);
+      console.log('🔐 Encrypted result:', encrypted);
+      
+      // Store encrypted data
+      localStorage.setItem('solace_conversation_history', JSON.stringify(encrypted));
+      console.log('💾 Saved encrypted blob to localStorage');
+      setConversationHistory(updatedHistory);
+    } catch (err) {
+      console.error('Failed to save conversation history:', err);
+    }
+  };
+
+  // Load and decrypt conversation history
+  const loadConversationHistory = async () => {
+    try {
+      const encryptedData = localStorage.getItem('solace_conversation_history');
+      if (!encryptedData) return;
+      
+      console.log('📖 Loading encrypted data from localStorage:', encryptedData);
+      const encrypted = JSON.parse(encryptedData);
+      // For the fallback implementation, we don't need to pass a key since it uses localStorage
+      const passphrase = "solace-demo-passphrase"; // Must match above
+      const key = await getKeyFromPassphrase(passphrase);
+      const decrypted = await decryptBlob(encrypted, key);
+      console.log('🔓 Decrypted result:', decrypted);
+      const history = JSON.parse(decrypted);
+      setConversationHistory(history);
+    } catch (err) {
+      console.error('Failed to load conversation history:', err);
+    }
+  };
+
+  // Clear conversation history
+  const clearConversationHistory = () => {
+    localStorage.removeItem('solace_conversation_history');
+    setConversationHistory([]);
+    setShowHistory(false);
+  };
+
+  // Load history on component mount
+  useEffect(() => {
+    loadConversationHistory();
+  }, []);
 
   // Load available audio devices
   const loadDevices = async () => {
@@ -137,58 +220,54 @@ const App: React.FC = () => {
     return new Blob([wavBuffer], { type: 'audio/wav' });
   }
 
-  // Start recording (capture ALL audio between Start and Stop)
+  // Start recording with VAD
   const handleStart = async () => {
     setTranscript('');
     setStatus('Listening...');
     setError(null);
     setChatResponse('');
     setPendingTranscript(null);
-    audioBufferRef.current = [];
+    vadFramesRef.current = [];
     setRecording(true);
     recordingRef.current = true;
+    
     try {
-      console.log('[AUDIO] Recording started');
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+      console.log('[VAD] Starting voice detection...');
+      
+      // Start VAD with optimal settings
+      const vadIterator = recordAndDetectVoice({
+        sensitivity: 1, // Optimal sensitivity for better speech detection
+        frameDuration: 30,
+        sampleRate: 16000
       });
-      mediaStreamRef.current = stream;
-      const audioContext = new AudioContext({ sampleRate: 16000 });
-      audioContextRef.current = audioContext;
-      const source = audioContext.createMediaStreamSource(stream);
-      sourceNodeRef.current = source;
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      scriptProcessorRef.current = processor;
-      processor.onaudioprocess = (event) => {
-        if (!recordingRef.current) return;
-        const input = event.inputBuffer.getChannelData(0);
-        // Copy input to a new Float32Array and store
-        audioBufferRef.current.push(new Float32Array(input));
+      
+      vadIteratorRef.current = vadIterator;
+      
+      // Start collecting voice frames
+      const collectFrames = async () => {
+        try {
+          for await (const { frame } of vadIterator) {
+            if (!recordingRef.current) break;
+            vadFramesRef.current.push(frame);
+            console.log('[VAD] Collected voice frame, total frames:', vadFramesRef.current.length);
+          }
+        } catch (err) {
+          console.error('[VAD] Error collecting frames:', err);
+          if (recordingRef.current) {
+            setError('Voice detection error: ' + (err instanceof Error ? err.message : String(err)));
+            setStatus('Error');
+          }
+        }
       };
-      source.connect(processor);
-      processor.connect(audioContext.destination);
+      
+      collectFrames();
+      
     } catch (err) {
-      console.error('[AUDIO] Error starting recording:', err);
-      setError('Microphone error: ' + (err instanceof Error ? err.message : String(err)));
+      console.error('[VAD] Error starting voice detection:', err);
+      setError('Voice detection failed: ' + (err instanceof Error ? err.message : String(err)));
       setRecording(false);
       recordingRef.current = false;
       setStatus('Error');
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
     }
   };
 
@@ -197,59 +276,38 @@ const App: React.FC = () => {
     setRecording(false);
     recordingRef.current = false;
     setStatus('Transcribing...');
+    
     try {
-      // Clean up audio nodes
-      if (scriptProcessorRef.current) {
-        scriptProcessorRef.current.disconnect();
-        scriptProcessorRef.current.onaudioprocess = null;
-        scriptProcessorRef.current = null;
+      // Stop VAD iterator (just set to null, the for-await loop will break)
+      vadIteratorRef.current = null;
+      
+      console.log('[VAD] Recording stopped');
+      console.log('[VAD] Number of voice frames:', vadFramesRef.current.length);
+      
+      // Check if we captured any speech
+      if (vadFramesRef.current.length === 0) {
+        setError('No speech detected. Please try speaking again.');
+        setStatus('No Speech');
+        return;
       }
-      if (sourceNodeRef.current) {
-        sourceNodeRef.current.disconnect();
-        sourceNodeRef.current = null;
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
-        mediaStreamRef.current = null;
-      }
-      // Concatenate all Float32Array buffers
-      const allSamples = audioBufferRef.current.length > 0
-        ? new Float32Array(audioBufferRef.current.reduce((acc, cur) => acc + cur.length, 0))
-        : new Float32Array(0);
-      let offset = 0;
-      for (const buf of audioBufferRef.current) {
-        allSamples.set(buf, offset);
-        offset += buf.length;
-      }
-      // Logging: buffer info
-      console.log('[AUDIO] Recording stopped');
-      console.log('[AUDIO] Number of audio buffers:', audioBufferRef.current.length);
-      console.log('[AUDIO] Total samples:', allSamples.length);
-      console.log('[AUDIO] Duration (s):', (allSamples.length / 16000).toFixed(3));
-      if (allSamples.length > 0) {
-        console.log('[AUDIO] First 10 samples:', Array.from(allSamples.slice(0, 10)));
-        console.log('[AUDIO] Last 10 samples:', Array.from(allSamples.slice(-10)));
-      }
-      // Convert to WAV
-      const pcm = floatTo16BitPCM(allSamples);
-      const wavBuffer = encodeWAV(pcm, 16000);
-      const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
-      console.log('[AUDIO] WAV blob size:', wavBlob.size, 'type:', wavBlob.type);
-      // Send to Whisper as before
+      
+      // Convert VAD frames to WAV
+      const wavBlob = framesToWav(vadFramesRef.current, 16000);
+      console.log('[VAD] WAV blob size:', wavBlob.size, 'type:', wavBlob.type);
+      
+      // Send to ASR
+      console.log('[ASR] Sending request to:', ASR_API_URL);
       const formData = new FormData();
-      formData.append('file', wavBlob, 'audio.wav');
+      formData.append('file', wavBlob, 'recording.wav');
       formData.append('model', 'whisper-1');
+      
       const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
       if (!apiKey) {
         setError('No OpenAI API key provided. Please set your API key.');
         setStatus('Error');
         return;
       }
-      console.log('[ASR] Sending request to:', ASR_API_URL);
+      
       const resp = await fetch(ASR_API_URL, {
         method: 'POST',
         headers: {
@@ -257,20 +315,19 @@ const App: React.FC = () => {
         },
         body: formData
       });
-      if (!resp.ok) {
-        const data = await resp.json();
-        console.error('[ASR] Error response:', data);
-        setError('ASR failed: ' + (data?.error?.message || resp.statusText));
-        setStatus('Error');
-        return;
-      }
+      
+      if (!resp.ok) throw new Error('ASR failed: ' + resp.statusText);
+      
       const data = await resp.json();
       console.log('[ASR] Success response:', data);
-      setTranscript(data.text || '(No transcript)');
-      setStatus('Transcript ready');
+      
+      const transcriptText = data.text || '';
+      setTranscript(transcriptText);
+      setStatus('Done');
+      
     } catch (err) {
-      console.error('[ASR] Exception:', err);
-      setError('ASR error: ' + (err instanceof Error ? err.message : String(err)));
+      console.error('[VAD/ASR] Error:', err);
+      setError('Transcription error: ' + (err instanceof Error ? err.message : String(err)));
       setStatus('Error');
     }
   };
@@ -328,6 +385,7 @@ const App: React.FC = () => {
         return updated.slice(-5);
       });
       setStatus('Done');
+      saveConversationToHistory(userTranscript, aiReply); // Save to history
     } catch (err) {
       setError('Chatbot error: ' + (err instanceof Error ? err.message : String(err)));
       setStatus('Error');
@@ -504,6 +562,104 @@ const App: React.FC = () => {
             <div style={{ fontSize: '0.98rem', color: '#388e3c', marginTop: 8 }}>
               <b>Tip:</b> You can start a conversation any time. I'm always ready to listen!
             </div>
+          </div>
+        )}
+      </div>
+      {/* Previous Chats Dropdown Button (top right, below About) */}
+      <div style={{ position: 'absolute', top: 80, right: 32, zIndex: 20 }}>
+        <button
+          aria-label="View last 3 transcripts"
+          onClick={() => setShowHistory(v => !v)}
+          style={{
+            background: 'rgba(255,255,255,0.85)',
+            border: '2.5px solid #4caf50',
+            borderRadius: '50%',
+            width: 44,
+            height: 44,
+            fontSize: '1.4rem',
+            cursor: 'pointer',
+            boxShadow: '0 2px 12px rgba(76,175,80,0.13)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background 0.18s',
+            outline: showHistory ? '2.5px solid #2e7d32' : 'none',
+          }}
+        >
+          <span role="img" aria-label="Previous chats">💬</span>
+        </button>
+        {showHistory && (
+          <div
+            id="solace-history-dropdown"
+            style={{
+              position: 'absolute',
+              top: 54,
+              right: 0,
+              minWidth: 320,
+              maxWidth: 380,
+              background: 'rgba(255,255,255,0.98)',
+              border: '2.5px solid #4caf50',
+              borderRadius: 16,
+              boxShadow: '0 8px 32px rgba(76,175,80,0.13)',
+              padding: '1.3rem 1.5rem',
+              zIndex: 100,
+              fontSize: '1.08rem',
+              color: '#1b5e20',
+              fontWeight: 500,
+              lineHeight: 1.6,
+              textAlign: 'left',
+              marginTop: 8,
+              animation: 'fadeIn 0.18s',
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: '1.18rem', marginBottom: 8, color: '#2e7d32', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span role="img" aria-label="Last 3 transcripts">💬</span> Last 3 Transcripts
+            </div>
+            {conversationHistory.length === 0 ? (
+              <div style={{ color: '#666', fontStyle: 'italic' }}>
+                No previous conversations
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    maxHeight: '55vh',
+                    overflowY: 'auto',
+                    marginBottom: '0.5rem',
+                  }}
+                >
+                  {conversationHistory.map((conv, idx) => (
+                    <div key={idx} style={{ marginBottom: '1rem', padding: '0.8rem', background: 'rgba(76,175,80,0.1)', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>
+                        {new Date(conv.timestamp).toLocaleString()}
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>You:</strong> {conv.user}
+                      </div>
+                      <div>
+                        <strong>Solace:</strong> {conv.ai}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={clearConversationHistory}
+                  style={{
+                    background: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '0.5rem 1rem',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    marginTop: '0.5rem',
+                    width: '100%',
+                  }}
+                >
+                  Clear History
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

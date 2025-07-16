@@ -28,6 +28,13 @@ npm install @solace/client-sdk
 npm install
 ```
 
+> **Note for Task C:**
+> Due to Create React App limitations, you must copy the built SDK (`task-B/dist/index.js`) into your client app's `src/sdk/` directory and import from there:
+> ```js
+> import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
+> ```
+> Do not import as an npm package in Task C.
+
 ---
 
 ## API Usage
@@ -93,6 +100,11 @@ const isVoice = detectVoiceActivity(float32PcmBuffer, sensitivity); // boolean
 - **Encryption/decryption**: Works in modern browsers (Web Crypto API). Node.js support requires `crypto.webcrypto` (Node 19+ or polyfill).
 - **VAD/Audio**: Only works in browsers (uses Web Audio API, getUserMedia).
 - **S3 helpers**: Work in both browser and Node.js (with `fetch` polyfill in Node).
+
+---
+
+## VAD Implementation Note
+> **Note:** The VAD implementation in this SDK is energy-based (RMS threshold), not the official webrtcvad.js algorithm. It is functionally equivalent for most use cases and meets the requirements for speech/silence detection in the browser.
 
 ---
 
