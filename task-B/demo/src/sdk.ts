@@ -32,6 +32,8 @@ const DEFAULT_VAD_CONFIG: Required<VADConfig> = {
   sampleRate: 16000
 };
 
+import { AudioNodeVAD } from '@ricky0123/vad-web';
+
 /**
  * Records audio from microphone and yields only frames containing voice activity.
  * Uses WebRTC VAD to detect speech in real-time.
@@ -107,9 +109,18 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
   let audioProcessed = false;
   let resolveNext: ((value: { frame: ArrayBuffer; timestamp: number }) => void) | null = null;
   
+  // Initialize Silero VAD with callback
+  let lastIsSpeech = false;
+  const thresholds = [0.5, 0.7, 0.85, 0.95];
+  const vad = await AudioNodeVAD.new(audioContext, {
+    onFrameProcessed: (probs) => {
+      lastIsSpeech = probs.isSpeech >= thresholds[vadConfig.sensitivity];
+    },
+  });
+
   // Set up audio processing
   console.log('VAD: Setting up audio processing...');
-  processor.onaudioprocess = (event) => {
+  processor.onaudioprocess = async (event) => {
     if (isDone) return;
     
     if (!audioProcessed) {
@@ -125,22 +136,16 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
       bufferIndex++;
       
       if (bufferIndex >= frameSize) {
-        // Process complete frame
-        const hasVoice = detectVoiceActivity(buffer, vadConfig.sensitivity);
-        
-        if (hasVoice) {
-          // Convert to 16-bit PCM for compatibility
+        // Process frame with vad-web
+        await vad.processFrame(buffer);
+        if (lastIsSpeech) {
           const pcmFrame = convertToPCM(buffer);
           const timestamp = startTime + (frameCount * vadConfig.frameDuration);
-          
-          console.log(`VAD: Voice detected! Frame ${frameCount}, timestamp ${timestamp}`);
-          
+          console.log(`VAD: Voice detected (burst)! Frame ${frameCount}, timestamp ${timestamp}`);
           const frameData = {
             frame: pcmFrame,
             timestamp
           };
-          
-          // Add to queue or resolve immediately
           if (resolveNext) {
             console.log('VAD: Resolving immediately with frame');
             resolveNext(frameData);
@@ -150,9 +155,8 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
             frameQueue.push(frameData);
           }
         } else {
-          // Log some non-voice frames too for debugging
-          if (Math.random() < 0.1) { // Log 10% of non-voice frames
-            console.log(`VAD: No voice in frame ${frameCount}`);
+          if (Math.random() < 0.1) {
+            console.log(`VAD: No voice in frame ${frameCount} (threshold: ${thresholds[vadConfig.sensitivity]})`);
           }
         }
         
@@ -210,31 +214,6 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
     processor.disconnect();
     audioContext.close();
   }
-}
-
-/**
- * Simple energy-based voice activity detection.
- * In a production environment, use webrtcvad for better accuracy.
- */
-function detectVoiceActivity(buffer: Float32Array, sensitivity: number): boolean {
-  // Calculate RMS (Root Mean Square) energy
-  let sum = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    sum += buffer[i] * buffer[i];
-  }
-  const rms = Math.sqrt(sum / buffer.length);
-  
-  // Threshold based on sensitivity (0-3)
-  // Lower threshold = more sensitive
-  const thresholds = [0.001, 0.0005, 0.0002, 0.0001]; // Much more sensitive thresholds for testing
-  const threshold = thresholds[sensitivity] || 0.0002;
-  
-  // Add some debugging
-  if (Math.random() < 0.01) { // Log 1% of frames to avoid spam
-    console.log(`VAD: RMS=${rms.toFixed(6)}, threshold=${threshold.toFixed(6)}, sensitivity=${sensitivity}`);
-  }
-  
-  return rms > threshold;
 }
 
 /**

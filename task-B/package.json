@@ -46,17 +46,16 @@
     "sdk",
     "solace"
   ],
-  "dependencies": {
-    "webrtcvad": "^1.0.0"
-  },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "jest": "^29.0.0",
     "@types/jest": "^29.0.0",
-    "eslint": "^8.0.0",
     "@types/node": "^20.0.0",
-    "@types/webrtcvad": "^1.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
     "jest-environment-jsdom": "^29.0.0",
-    "ts-jest": "^29.0.0"
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@ricky0123/vad-web": "^0.0.24"
   }
-} 
+}

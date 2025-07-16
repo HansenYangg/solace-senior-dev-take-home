@@ -14,6 +14,8 @@ const DEFAULT_VAD_CONFIG: Required<Omit<VADConfig, 'deviceId'>> = {
   sampleRate: 16000
 };
 
+import { AudioNodeVAD } from '@ricky0123/vad-web';
+
 export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterable<{ frame: ArrayBuffer; timestamp: number }> {
   console.log('=== VAD: Function called ===');
   const vadConfig = { ...DEFAULT_VAD_CONFIG, ...config };
@@ -30,15 +32,6 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
   console.log('VAD: Requesting microphone access...');
   let stream;
   try {
-    // Debug: List available audio devices
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioInputs = devices.filter(device => device.kind === 'audioinput');
-    console.log('Available audio input devices:', audioInputs.map(d => ({ id: d.deviceId, label: d.label })));
-    
-    // Check if we have permission for audio input
-    const permissions = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-    console.log('Microphone permission state:', permissions.state);
-    
     stream = await navigator.mediaDevices.getUserMedia({ 
       audio: {
         deviceId: vadConfig.deviceId ? { exact: vadConfig.deviceId } : undefined,
@@ -46,19 +39,10 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: false // Disable auto gain to see raw audio
+        autoGainControl: false
       } 
     });
     console.log('VAD: Got microphone stream successfully');
-    console.log('VAD: Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, label: t.label, enabled: t.enabled })));
-    
-    // Debug: Check if this is actually a microphone stream
-    const audioTrack = stream.getAudioTracks()[0];
-    if (audioTrack) {
-      console.log('VAD: Audio track settings:', audioTrack.getSettings());
-      console.log('VAD: Audio track constraints:', audioTrack.getConstraints());
-      console.log('VAD: Audio track capabilities:', audioTrack.getCapabilities());
-    }
   } catch (error) {
     console.error('VAD: Failed to get microphone stream:', error);
     throw error;
@@ -72,8 +56,6 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
   console.log('VAD: Frame size in samples:', frameSize);
   const buffer = new Float32Array(frameSize);
   let bufferIndex = 0;
-  console.log('VAD: Creating script processor...');
-  // Use next power of two for buffer size
   const processorBufferSize = Math.pow(2, Math.ceil(Math.log2(frameSize)));
   const processor = audioContext.createScriptProcessor(processorBufferSize, 1, 1);
   console.log('VAD: Script processor created');
@@ -83,8 +65,18 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
   let isDone = false;
   let audioProcessed = false;
   let resolveNext: ((value: { frame: ArrayBuffer; timestamp: number }) => void) | null = null;
+  // Initialize Silero VAD with callback
+  let lastIsSpeech = false;
+  const thresholds = [0.5, 0.7, 0.85, 0.95];
+  const threshold = thresholds[vadConfig.sensitivity] || 0.7; // Default to 0.7 if sensitivity is out of bounds
+  const vad = await AudioNodeVAD.new(audioContext, {
+    onFrameProcessed: (probs) => {
+      lastIsSpeech = probs.isSpeech >= threshold;
+    },
+  });
+  // Set up audio processing
   console.log('VAD: Setting up audio processing...');
-  processor.onaudioprocess = (event) => {
+  processor.onaudioprocess = async (event) => {
     if (isDone) return;
     if (!audioProcessed) {
       console.log('VAD: First audio process event received!');
@@ -95,11 +87,12 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
       buffer[bufferIndex] = input[i];
       bufferIndex++;
       if (bufferIndex >= frameSize) {
-        const hasVoice = detectVoiceActivity(buffer, vadConfig.sensitivity);
-        if (hasVoice) {
+        // Process frame with vad-web
+        await vad.processFrame(buffer);
+        if (lastIsSpeech) {
           const pcmFrame = convertToPCM(buffer);
           const timestamp = startTime + (frameCount * vadConfig.frameDuration);
-          console.log(`VAD: Voice detected! Frame ${frameCount}, timestamp ${timestamp}`);
+          console.log(`VAD: Voice detected (burst)! Frame ${frameCount}, timestamp ${timestamp}`);
           const frameData = {
             frame: pcmFrame,
             timestamp
@@ -114,7 +107,7 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
           }
         } else {
           if (Math.random() < 0.1) {
-            console.log(`VAD: No voice in frame ${frameCount}`);
+            console.log(`VAD: No voice in frame ${frameCount} (threshold: ${threshold})`);
           }
         }
         bufferIndex = 0;
@@ -122,16 +115,19 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
       }
     }
   };
+  // Connect audio nodes
   console.log('VAD: Connecting audio nodes...');
   source.connect(processor);
   processor.connect(audioContext.destination);
   console.log('VAD: Audio nodes connected');
+  // Resume audio context if it's suspended
   console.log('VAD: Checking audio context state...');
   if (audioContext.state === 'suspended') {
     console.log('VAD: Resuming suspended audio context...');
     await audioContext.resume();
   }
   console.log('VAD: Audio context state:', audioContext.state);
+  // Create a proper async generator
   console.log('VAD: Starting async generator loop...');
   try {
     while (!isDone) {
@@ -157,57 +153,6 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
     processor.disconnect();
     audioContext.close();
   }
-}
-
-/**
- * Simple energy-based voice activity detection.
- * In a production environment, use webrtcvad for better accuracy.
- */
-function detectVoiceActivity(buffer: Float32Array, sensitivity: number): boolean {
-  // Calculate RMS (Root Mean Square) energy
-  let sum = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    sum += buffer[i] * buffer[i];
-  }
-  const rms = Math.sqrt(sum / buffer.length);
-  
-  // Calculate additional metrics for debugging
-  let maxAmplitude = 0;
-  let minAmplitude = 0;
-  let zeroCrossings = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    maxAmplitude = Math.max(maxAmplitude, Math.abs(buffer[i]));
-    minAmplitude = Math.min(minAmplitude, buffer[i]);
-    if (i > 0 && (buffer[i] >= 0) !== (buffer[i-1] >= 0)) {
-      zeroCrossings++;
-    }
-  }
-  
-  // Threshold based on sensitivity (0-3)
-  // Lower threshold = more sensitive
-  // Based on microphone test results, adjust thresholds to be more realistic
-  const thresholds = [0.005, 0.003, 0.002, 0.001]; // Much higher thresholds based on actual speech levels
-  const threshold = thresholds[sensitivity] || 0.002;
-  
-  // Log detailed audio analysis for debugging
-  if (Math.random() < 0.05) { // Log 5% of frames to avoid spam
-    console.log(`VAD: Frame analysis - RMS=${rms.toFixed(6)}, max=${maxAmplitude.toFixed(6)}, min=${minAmplitude.toFixed(6)}, zeroCrossings=${zeroCrossings}, threshold=${threshold.toFixed(6)}, sensitivity=${sensitivity}`);
-    
-    // Log first few samples to see what the audio looks like
-    const sampleValues = Array.from(buffer.slice(0, 10)).map(v => v.toFixed(4));
-    console.log(`VAD: First 10 samples: [${sampleValues.join(', ')}]`);
-  }
-  
-  const hasVoice = rms > threshold;
-  
-  // Log when we actually detect voice vs background noise
-  if (hasVoice && rms > threshold * 2) { // Only log when we have strong voice detection
-    console.log(`VAD: STRONG VOICE DETECTED - RMS=${rms.toFixed(6)}, threshold=${threshold.toFixed(6)}`);
-  } else if (hasVoice) {
-    console.log(`VAD: Weak voice detected - RMS=${rms.toFixed(6)}, threshold=${threshold.toFixed(6)}`);
-  }
-  
-  return hasVoice;
 }
 
 /**

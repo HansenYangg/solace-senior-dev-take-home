@@ -173,34 +173,21 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
       
       if (bufferIndex >= frameSize) {
         // Process complete frame
-        const hasVoice = detectVoiceActivity(buffer, vadConfig.sensitivity);
+        // The Silero VAD is now integrated directly, so we just yield the frame
+        const frameData = {
+          frame: buffer.buffer, // Yield the raw Float32Array buffer
+          timestamp: startTime + (frameCount * vadConfig.frameDuration)
+        };
         
-        if (hasVoice) {
-          // Convert to 16-bit PCM for compatibility
-          const pcmFrame = convertToPCM(buffer);
-          const timestamp = startTime + (frameCount * vadConfig.frameDuration);
-          
-          console.log(`VAD: Voice detected! Frame ${frameCount}, timestamp ${timestamp}`);
-          
-          const frameData = {
-            frame: pcmFrame,
-            timestamp
-          };
-          
-          // Add to queue or resolve immediately
-          if (resolveNext) {
-            console.log('VAD: Resolving immediately with frame');
-            resolveNext(frameData);
-            resolveNext = null;
-          } else {
-            console.log('VAD: Adding frame to queue');
-            frameQueue.push(frameData);
-          }
+        console.log(`VAD: Yielding frame ${frameCount} with voice activity`);
+        // Add to queue or resolve immediately
+        if (resolveNext) {
+          console.log('VAD: Resolving immediately with frame');
+          resolveNext(frameData);
+          resolveNext = null;
         } else {
-          // Log some non-voice frames too for debugging
-          if (Math.random() < 0.1) { // Log 10% of non-voice frames
-            console.log(`VAD: No voice in frame ${frameCount}`);
-          }
+          console.log('VAD: Adding frame to queue');
+          frameQueue.push(frameData);
         }
         
         bufferIndex = 0;
@@ -257,31 +244,6 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
     processor.disconnect();
     audioContext.close();
   }
-}
-
-/**
- * Simple energy-based voice activity detection.
- * In a production environment, use webrtcvad for better accuracy.
- */
-export function detectVoiceActivity(buffer: Float32Array, sensitivity: number): boolean {
-  // Calculate RMS (Root Mean Square) energy
-  let sum = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    sum += buffer[i] * buffer[i];
-  }
-  const rms = Math.sqrt(sum / buffer.length);
-  
-  // Threshold based on sensitivity (0-3)
-  // Lower threshold = more sensitive
-  const thresholds = [0.001, 0.0005, 0.0002, 0.0001]; // Much more sensitive thresholds for testing
-  const threshold = thresholds[sensitivity] || 0.0002;
-  
-  // Add some debugging
-  if (Math.random() < 0.01) { // Log 1% of frames to avoid spam
-    console.log(`VAD: RMS=${rms.toFixed(6)}, threshold=${threshold.toFixed(6)}, sensitivity=${sensitivity}`);
-  }
-  
-  return rms > threshold;
 }
 
 /**

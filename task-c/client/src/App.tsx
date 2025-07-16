@@ -866,6 +866,7 @@ const App: React.FC = () => {
               color: '#1b5e20',
               fontWeight: '400',
               textShadow: '0 2px 4px rgba(0,0,0,0.08)',
+              marginBottom: '1.5rem',
             }}>
               Your AI Companion for Emotional Wellness
             </div>
