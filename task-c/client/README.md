@@ -2,114 +2,50 @@
 
 ---
 
-## 🚨 Critical: Setting Up the SDK for Voice Features (Step-by-Step)
+## Quick Start
 
-> **IMPORTANT:** The voice recording and encryption features in this app rely on the SDK found in `src/sdk/`. This SDK is now maintained directly in this directory and is not copied from Task B. All VAD is powered by Ricky's Silero VAD (`@ricky0123/vad-web`).
+1. **Install dependencies:**
+   ```sh
+   cd task-c/client
+   npm install
+   ```
 
-### 1. Build the SDK in Task B
+2. **Add your environment variables:**
+   - Copy `.env.example` to `.env` and fill in your API keys and endpoints.
 
-Open a terminal in the project root and run:
-```sh
-cd ../../task-B
-npm install
-npm run build
-```
-This will generate the SDK file at `task-B/dist/index.js`.
+3. **(Optional) Enable Text-to-Speech (TTS):**
+   - In the project root, run:
+     ```sh
+     npm install express aws-sdk cors dotenv
+     node polly-proxy.js
+     ```
+   - This starts a local AWS Polly proxy for TTS at `http://localhost:5000/tts`.
 
-### 2. Copy the SDK File to Task C
+4. **Run the app:**
+   ```sh
+   npm start
+   ```
+   - Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-Copy the built SDK file into your client app:
-```sh
-cp ../../task-B/dist/index.js ./src/sdk/index.js
-```
-If the `src/sdk/` directory does not exist, create it first:
-```sh
-mkdir -p ./src/sdk
-cp ../../task-B/dist/index.js ./src/sdk/index.js
-```
+---
 
-### 3. Import the SDK in Your Code
+## Notes
 
-In your React components, import SDK functions like this:
-```js
-import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
-```
-**Do NOT** import from `@solace/client-sdk` or use npm/yarn link.
-
-### 4. Verify the SDK Import
-- Start the app (`npm start`).
-- Try to use the voice recording feature.
-- If you see errors like "Cannot find module './sdk/index'" or voice features are disabled, check that you copied the file correctly.
-
-### 5. Troubleshooting
-- If you rebuild the SDK in Task B, **recopy** the file to Task C.
-- If you see import errors, check the file path and that `index.js` exists in `src/sdk/`.
-- If voice features do not work, double-check all steps above.
+- The SDK required for voice and encryption features is **already included** in `src/sdk/index.js`.
+- **You do NOT need to build or copy the SDK** unless you want to update it. If you do, see the SDK update instructions at the end of this file.
+- All other features (ASR, Chatbot, TTS, encrypted memory) work out of the box after setup.
 
 ---
 
 ## Features
 
-- **Voice Capture & VAD:** Record your voice with real-time voice activity detection (VAD) using the SDK in `src/sdk/` (powered by Silero VAD, imported locally).
+- **Voice Capture & VAD:** Real-time voice activity detection (VAD) using the included SDK.
 - **ASR (Speech-to-Text):** Transcribe speech to text using OpenAI Whisper or another ASR API.
 - **Chatbot:** Send transcripts to OpenAI GPT-3.5/4 and receive intelligent responses.
-- **TTS (Text-to-Speech):** Play responses using AWS Polly (via a local proxy) with selectable voices.
-- **UI/UX:** Simple wireframe interface with buttons for Talk, Stop, Play Response, and a dropdown for voice selection.
-- **Error Handling:** All errors (mic, network, decryption, etc.) are surfaced in the UI.
-- **(Optional) Local Memory Layer:** Securely store the last 3 transcripts in encrypted form in your browser’s localStorage.
-
----
-
-## Setup
-
-### 1. Install Dependencies
-
-```sh
-cd task-c/client
-npm install
-```
-
-### 2. SDK Import (Important!)
-
-> **Note:** Due to Create React App limitations, the SDK is imported via a local file copy in `src/sdk/index.js` (copied from `task-B/dist/index.js`), not as an npm package. You must copy the built SDK into `src/sdk/` and import as:
-> ```js
-> import { encryptBlob, decryptBlob, recordAndDetectVoice } from './sdk/index';
-> ```
-
-### 3. Environment Variables
-
-Create a `.env` file in this directory (see `.env.example` for required variables):
-
-```env
-REACT_APP_OPENAI_API_KEY=your_openai_api_key
-REACT_APP_ASR_API_URL=https://api.openai.com/v1/audio/transcriptions
-REACT_APP_CHAT_API_URL=https://api.openai.com/v1/chat/completions
-# Add any other required variables here
-```
-
-**Note:** Do NOT commit secrets to version control.
-
-### 4. (Optional) Set Up Local Polly Proxy for TTS
-
-To enable Text-to-Speech, run the local AWS Polly proxy:
-
-```sh
-# In the project root
-npm install express aws-sdk cors dotenv
-node polly-proxy.js
-```
-
-This will start a server at `http://localhost:5000/tts` used by the app for TTS.
-
----
-
-## Running the Demo
-
-```sh
-npm start
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+- **TTS (Text-to-Speech):** Play responses using AWS Polly (via a local proxy).
+- **UI/UX:** Simple interface with Talk, Stop, Play Response, and voice selection.
+- **Error Handling:** All errors are surfaced in the UI.
+- **(Optional) Local Memory Layer:** Securely store the last 3 transcripts in encrypted form in your browser.
 
 ---
 
@@ -118,24 +54,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - **Talk:** Click to start recording. Speak into your mic.
 - **Stop:** Click to stop and transcribe.
 - **Play Response:** Listen to the AI’s reply with your chosen voice.
-- **Voice Selection:** Choose between available voices (e.g., male/female).
+- **Voice Selection:** Choose between available voices.
 - **(Optional) Memory:** The last 3 transcripts are securely stored in your browser (encrypted).
-
----
-
-## Local Memory Layer (Optional)
-
-The app can securely store your last 3 transcripts in the browser’s localStorage, encrypted using the @solace/client-sdk (imported via a local file copy in `src/sdk/`). This means your recent conversation history is private—even if someone accesses your device, they cannot read your transcripts without the decryption key.
-
----
-
-## Tests
-
-To run tests (if implemented):
-
-```sh
-npm test
-```
 
 ---
 
@@ -148,11 +68,20 @@ npm test
 
 ---
 
-## Security Notes
+## Updating the SDK (Only if Needed)
 
-- All sensitive data is encrypted before storage or transmission.
-- No secrets are committed to the repository.
-- IAM and API keys should be scoped with least privilege.
+If you want to update the SDK (e.g., after editing the TypeScript source):
+1. Build the SDK in Task B:
+   ```sh
+   cd ../../task-B
+   npm install
+   npm run build
+   ```
+2. Copy the built SDK to Task C:
+   ```sh
+   cp dist/index.js ../task-c/client/src/sdk/index.js
+   ```
+3. Restart the Task C app if it’s running.
 
 ---
 
@@ -161,6 +90,8 @@ npm test
 - **TTS not working?** Make sure the local Polly proxy is running.
 - **ASR/Chatbot errors?** Check your API keys and endpoints.
 - **Mic issues?** Ensure your browser has permission to access the microphone.
+
+---
 
 ## Architecture Flow
 
@@ -178,7 +109,6 @@ TTS (Polly)
   ↓
 Voice Output
 ```
-*This is the main flow for the voice-to-voice companion demo. S3 and Lambda are not used in this flow.*
 
 ### Optional Encrypted Memory Layer
 ```
@@ -192,7 +122,8 @@ Task B SDK (Decrypt)
   ↓
 User (Decrypted History)
 ```
-*This optional feature securely stores the last 3 transcripts in the browser.*
 
-## Last note - this might be a bit confusing so feel free to email me at hansenyang@berkeley.edu for clarification
+---
+
+For questions, email hansenyang@berkeley.edu
 

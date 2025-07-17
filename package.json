@@ -4,6 +4,7 @@
     "@types/react-dom": "^19.1.6"
   },
   "dependencies": {
+    "@ricky0123/vad-web": "^0.0.24",
     "aws-sdk": "^2.1692.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",

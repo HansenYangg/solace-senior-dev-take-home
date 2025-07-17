@@ -8,90 +8,42 @@ A secure voice processing system with enclave-style decryption, cross-platform c
 - **task-B/**: Cross-Platform Client SDK (@solace/client-sdk, powered by Silero VAD)
 - **task-C/**: Solace Lite End-to-End Demo (Voice → Voice Companion, using Silero VAD)
 
-## Prerequisites
+## Quick Start: Task C (End-to-End Demo)
 
-- Node.js (>=16.x)
-- Python (>=3.9)
-- AWS CLI
-- Docker
-- Git
-- AWS SAM CLI
-
-## Quick Start
-
-1. **Task A**: Deploy the decryption service
-   ```bash
-   cd task-A
-   # Follow setup instructions in task-A/README.md
-   ```
-
-2. **Task B**: Install and test the client SDK
-   ```bash
-   cd task-B
-   # Follow setup instructions in task-B/README.md
-   ```
-
-3. **Task C**: Run the end-to-end demo
-   ```bash
-   cd task-C
-   # Follow setup instructions in task-C/README.md
-   ```
-
-## Local TTS (Polly Proxy) Setup
-
-To enable Text-to-Speech (TTS) in the Task C frontend, you must run a local AWS Polly proxy server:
-
-1. In the project root, create a `.env` file with your AWS credentials:
-   ```
-   AWS_ACCESS_KEY_ID=your_access_key_id
-   AWS_SECRET_ACCESS_KEY=your_secret_access_key
-   AWS_REGION=us-east-1
-   ```
-2. Install dependencies:
+1. **Clone the repo:**
    ```sh
-   npm install express aws-sdk cors dotenv
+   git clone <REPO_URL>
+   cd solace-senior-dev-take-home
    ```
-3. Start the proxy server:
+2. **Install dependencies:**
    ```sh
-   node polly-proxy.js
+   cd task-c/client
+   npm install
    ```
-   The proxy will listen on `http://localhost:5000/tts`.
+3. **Add your environment variables:**
+   - Copy `.env.example` to `.env` and fill in your API keys and endpoints (only the task-c specific variables).
+4. **(Optional) Enable Text-to-Speech (TTS):**
+   - In the project root, run:
+     ```sh
+     npm install express aws-sdk cors dotenv
+     node polly-proxy.js
+     ```
+   - This starts a local AWS Polly proxy for TTS at `http://localhost:5000/tts`.
+5. **Run the app:**
+   ```sh
+   npm start
+   ```
+   - Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-4. The Task C React app will use this proxy for TTS. **The proxy must be running for TTS to work.**
+> **Note:** The SDK required for Task C is already included in `task-c/client/src/sdk/index.js`. You do NOT need to build or copy the SDK unless you want to update it. See Task C's README for details.
 
-## SDK Import Note (Task C)
-
-> **Note:** In Task C, due to Create React App limitations, the SDK is imported via a local file copy in `src/sdk/index.js` (copied from `task-B/dist/index.js`), not as an npm package. See Task C's README for details.
-
-## Submission Checklist
-
-- [ ] Task A: Lambda decryption service deployed and tested
-- [ ] Task B: Client SDK published and demo working
-- [ ] Task C: End-to-end voice companion demo running
-- [ ] All README files completed with setup instructions
-- [ ] Security best practices implemented
-- [ ] Tests passing across all components
-- [ ] .env.example files provided (no secrets included)
+## For Task A and Task B
+- See the respective `README.md` files in each directory for setup and usage instructions.
 
 ## Architecture Overview
 
-### 1. Task C: End-to-End Chat Demo
-```
-User Voice Input
-  ↓
-Task B SDK (VAD, optional memory encryption)
-  ↓
-ASR (OpenAI Whisper)
-  ↓
-Chatbot (OpenAI GPT)
-  ↓
-TTS (Polly)
-  ↓
-Voice Output
-```
-*This is the main flow for the voice-to-voice companion demo.*
 
-### 2. Task A/B: Secure Blob Flow
+### 1. Task A/B: Secure Blob Flow
 ```
 User Data
   ↓
@@ -105,7 +57,7 @@ User (Decrypted Data)
 ```
 *This flow demonstrates secure enclave-style decryption using AWS Lambda and KMS.*
 
-### 3. Task C: Solace Lite End-to-End Demo
+### 2. Task C: Solace Lite End-to-End Demo
 ```
 User Voice Input
   ↓

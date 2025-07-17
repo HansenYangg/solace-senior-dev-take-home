@@ -72,14 +72,14 @@ export async function* recordAndDetectVoice(config: VADConfig = {}): AsyncIterab
       const max = Math.max.apply(null, audio as unknown as number[]);
       console.log(`[VAD DEBUG] [MicVAD] Speech Segment RMS: ${rms} min: ${min} max: ${max}`);
       const pcmFrame = convertToPCM(audio);
-      const timestamp = startTime + (frameCount * vadConfig.frameDuration);
+          const timestamp = startTime + (frameCount * vadConfig.frameDuration);
       frameQueue.push({ frame: pcmFrame, timestamp });
       frameCount++;
-      if (resolveNext) {
+          if (resolveNext) {
         resolveNext(frameQueue.shift());
-        resolveNext = null;
+            resolveNext = null;
       }
-    }
+          }
   });
   await vad.start();
   console.log('MicVAD started');
