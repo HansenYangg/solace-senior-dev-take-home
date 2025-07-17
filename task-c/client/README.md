@@ -55,9 +55,8 @@
 ## Environment Variables Reference
 
 - `REACT_APP_OPENAI_API_KEY` – Your OpenAI API key (required for ASR and chatbot)
-- `REACT_APP_ASR_API_URL` – ASR endpoint (default: OpenAI Whisper)
-- `REACT_APP_CHAT_API_URL` – Chatbot endpoint (default: OpenAI GPT)
-- (Add any others as needed)
+- `REACT_APP_TTS_REGION' - region (I used us-east-1)
+- `REACT_APP_TTS_VOICE_ID' - default TTS voice (I set it to Mei, but Aria works too I believe)
   
 ---
 
