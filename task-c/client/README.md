@@ -11,7 +11,7 @@
    ```
 
 2. **Add your environment variables:**
-   - Make a .env in task-c/client and fill in your variables (only the task-c specific variables, aka REACT_APP_OPENAI_API_KEY and REACT_APP_TTS_REGION).
+   - Make a .env in task-c/client and fill in your variables (only the task-c specific variables, aka REACT_APP_OPENAI_API_KEY).
 
 3. **(Optional) Enable Text-to-Speech (TTS):**
    - In the project root, run:
