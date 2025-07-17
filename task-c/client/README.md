@@ -19,7 +19,7 @@
      npm install express aws-sdk cors dotenv
      node polly-proxy.js
      ```
-   - This starts a local AWS Polly proxy for TTS at `http://localhost:5000/tts`. Again, make sure you have a .env at the root with AWS_ACCESS_KEY_ID=... , AWS_SECRET_ACCESS_KEY=... , and AWS_REGION=... in the root for TTS to work.
+   - This starts a local AWS Polly proxy for TTS at `http://localhost:5000/tts`. Again, make sure you have a .env at the root with AWS_ACCESS_KEY_ID=... , AWS_SECRET_ACCESS_KEY=... , and AWS_REGION=... for TTS to work.
 
 4. **Run the app:**
    ```sh
