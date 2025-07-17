@@ -21,7 +21,7 @@ A secure voice processing system with enclave-style decryption, cross-platform c
    npm install
    ```
 3. **Add your environment variables:**
-   - Make a `.env` in task-c/client and fill in your variables (only the task-c specific variables, aka REACT_APP_OPENAI_API_KEY and REACT_APP_TTS_REGION). See the README in task-c/client for exact details.
+   - Make a `.env` in task-c/client (only the task-c specific variables, aka REACT_APP_OPENAI_API_KEY ; only this is needed). See the README in task-c/client for exact details.
      
 4. **(Optional) Enable Text-to-Speech (TTS):**
    - In the project root, run:
