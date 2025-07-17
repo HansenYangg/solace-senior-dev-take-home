@@ -11,7 +11,7 @@
    ```
 
 2. **Add your environment variables:**
-   - Copy `.env.example` to `.env` and fill in your API keys and endpoints.
+   - Make a .env in task-c/client and fill in your variables (only the task-c specific variables, aka REACT_APP_OPENAI_API_KEY, REACT_APP_TTS_REGION, and REACT_APP_TTS_VOICE_ID=Mei).
 
 3. **(Optional) Enable Text-to-Speech (TTS):**
    - In the project root, run:
@@ -19,7 +19,7 @@
      npm install express aws-sdk cors dotenv
      node polly-proxy.js
      ```
-   - This starts a local AWS Polly proxy for TTS at `http://localhost:5000/tts`.
+   - This starts a local AWS Polly proxy for TTS at `http://localhost:5000/tts`. Again, make sure you have a .env at the root with AWS_ACCESS_KEY_ID=... , AWS_SECRET_ACCESS_KEY=... , and AWS_REGION=... in the root for TTS to work.
 
 4. **Run the app:**
    ```sh
@@ -29,13 +29,6 @@
 
 ---
 
-## Notes
-
-- The SDK required for voice and encryption features is **already included** in `src/sdk/index.js`.
-- **You do NOT need to build or copy the SDK** unless you want to update it. If you do, see the SDK update instructions at the end of this file.
-- All other features (ASR, Chatbot, TTS, encrypted memory) work out of the box after setup.
-
----
 
 ## Features
 
