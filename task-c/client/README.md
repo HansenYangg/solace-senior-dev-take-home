@@ -65,24 +65,7 @@
 - `REACT_APP_ASR_API_URL` – ASR endpoint (default: OpenAI Whisper)
 - `REACT_APP_CHAT_API_URL` – Chatbot endpoint (default: OpenAI GPT)
 - (Add any others as needed)
-
----
-
-## Updating the SDK (Only if Needed)
-
-If you want to update the SDK (e.g., after editing the TypeScript source):
-1. Build the SDK in Task B:
-   ```sh
-   cd ../../task-B
-   npm install
-   npm run build
-   ```
-2. Copy the built SDK to Task C:
-   ```sh
-   cp dist/index.js ../task-c/client/src/sdk/index.js
-   ```
-3. Restart the Task C app if it’s running.
-
+  
 ---
 
 ## Troubleshooting
