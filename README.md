@@ -36,7 +36,6 @@ A secure voice processing system with enclave-style decryption, cross-platform c
    ```
    - Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-> **Note:** The SDK required for Task C is already included in `task-c/client/src/sdk/index.js`. You do NOT need to build or copy the SDK unless you want to update it. See Task C's README for details.
 
 ## For Task A and Task B
 - See the respective `README.md` files in each directory for setup and usage instructions.
