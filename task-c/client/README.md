@@ -11,7 +11,7 @@
    ```
 
 2. **Add your environment variables:**
-   - Make a .env in task-c/client and fill in your variables (only the task-c specific variables, aka REACT_APP_OPENAI_API_KEY, REACT_APP_TTS_REGION, and REACT_APP_TTS_VOICE_ID=Mei).
+   - Make a .env in task-c/client and fill in your variables (only the task-c specific variables, aka REACT_APP_OPENAI_API_KEY and REACT_APP_TTS_REGION).
 
 3. **(Optional) Enable Text-to-Speech (TTS):**
    - In the project root, run:
@@ -56,7 +56,6 @@
 
 - `REACT_APP_OPENAI_API_KEY` – Your OpenAI API key (required for ASR and chatbot)
 - `REACT_APP_TTS_REGION` - region (I used us-east-1)
-- `REACT_APP_TTS_VOICE_ID` - default TTS voice (I set it to Mei, but Aria works too I believe)
   
 ---
 
