@@ -55,7 +55,6 @@
 ## Environment Variables Reference
 
 - `REACT_APP_OPENAI_API_KEY` – Your OpenAI API key (required for ASR and chatbot)
-- `REACT_APP_TTS_REGION` - region (I used us-east-1)
   
 ---
 
