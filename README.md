@@ -1,4 +1,4 @@
-# Solace Senior Developer Take-Home
+# Solace Project
 
 A secure voice processing system with enclave-style decryption, cross-platform client SDK, and end-to-end voice companion demo.
 
